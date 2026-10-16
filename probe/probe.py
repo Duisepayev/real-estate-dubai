@@ -27,10 +27,13 @@ print("PROPERTY KEYS", sorted(p.keys()))
 for k in ["offering_type", "price", "description", "price_per_area", "deal_badges", "badges", "is_price_reduced", "price_drop", "previous_price", "listed_date", "location_tree", "project", "unit_area"]:
     if k in p: print(k, "=", json.dumps(p[k], ensure_ascii=False)[:300])
 print("pageProps keys", list(d["props"]["pageProps"].keys()))
-fc = d["props"]["pageProps"]["filterCapabilities"]["catalog"]["filter"]
+fc = d["props"]["pageProps"]["filterCapabilities"]["catalog"]
 for k in ["deal_badges", "listed_within", "price_type", "category_id", "completion_status"]:
-    print(k, json.dumps(fc.get(f"{k}") or fc.get(f"filter[{k}]"), ensure_ascii=False)[:600])
+    print(k, json.dumps(fc.get(f"filter[{k}]"), ensure_ascii=False)[:600])
 print("filter keys", list(fc.keys()))
+print("searchQuery", json.dumps(d["props"]["pageProps"].get("searchQuery"), ensure_ascii=False)[:800])
+print("filtersValueFromQuery", json.dumps(d["props"]["pageProps"].get("filtersValueFromQuery"), ensure_ascii=False)[:800])
+print("payment_method", p.get("payment_method"), "is_price_drop", p.get("is_price_drop"), "great", p.get("is_great_value"), "rooms", p.get("rooms"))
 
 for q in ["Emaar Beachfront", "Palm Jumeirah", "Balqis", "Jumeirah Beach Residence", "Dubai Hills Estate"]:
     for u in [f"https://www.propertyfinder.ae/api/pwa/locations?locale=en&filters.name={urllib.parse.quote(q)}&pagination.limit=5",
@@ -46,8 +49,7 @@ if d:
     sr = d["props"]["pageProps"].get("searchResult") or {}
     print("meta", json.dumps(sr.get("meta", {}), ensure_ascii=False)[:300])
     if sr.get("listings"): print(json.dumps(sr["listings"][0]["property"]["location"], ensure_ascii=False))
-    print("pageProps keys", list(d["props"]["pageProps"].keys()))
-    print(json.dumps(d["props"]["pageProps"].get("searchParams") or d["props"]["pageProps"].get("filters") or {}, ensure_ascii=False)[:800])
+    print("searchQuery", json.dumps(d["props"]["pageProps"].get("searchQuery"), ensure_ascii=False)[:800])
 
 print("=== DLD ===")
 def dld(extra):
