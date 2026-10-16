@@ -101,6 +101,10 @@ def run(cfg, args):
             log(f"[notify] ошибка: {e}")
     if digest:
         digest.sort(key=lambda x: -x[0])
+        uniq = {}
+        for item in digest:  # один объект от разных агентов — одна строка
+            uniq.setdefault(item[1]["fingerprint"], item)
+        digest = list(uniq.values())
         lines = [f"<b>Мониторинг: стартовая база</b>\nСохранено {len(collected)} объявлений, кандидатов {len(digest)}. "
                  "Дальше будут приходить только новые объекты и изменения цен. Топ по дисконту к сделкам DLD:"]
         for d, n, r in digest[:8]:
