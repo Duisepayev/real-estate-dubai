@@ -117,7 +117,7 @@ class Projects:
         Все значимые слова проекта DLD должны встречаться в названиях объявления;
         из подходящих берётся самый конкретный (больше слов). Возвращает (project, score)."""
         nt = set().union(*(tokens(n) for n in names)) if names else set()
-        own = tokens(names[0]) if names else set()
+        own = tokens(names[-1]) if names else set()  # последнее — само здание
         for proj, _area, pt in self.rows:
             if pt and pt == own:  # точное совпадение с названием здания («The 8»)
                 return proj, 1.0
@@ -155,6 +155,12 @@ def comps(db, project, listing, months=12, size_tol=0.25):
         q += " AND size_sqm BETWEEN ? AND ?"
         args += [size * (1 - size_tol), size * (1 + size_tol)]
     rows = db.execute(q, args).fetchall()
+    # квартиру сравниваем с квартирами, а не с гостиничными апартаментами, если их хватает
+    if listing["property_type"] not in ("villa", "townhouse"):
+        flats = db.execute(q.replace("sub_type IN (?,?)", "sub_type IN (?)"),
+                           [project, since, "Flat", *args[4:]]).fetchall()
+        if len(flats) >= 3 or len(flats) == len(rows):
+            rows = flats
     # готовый объект сравниваем с готовыми, off-plan — со всеми
     if listing.get("completion") == "ready":
         ready = [r for r in rows if not r[3]]

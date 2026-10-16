@@ -73,6 +73,19 @@ class T(unittest.TestCase):
         self.assertEqual(pr.match(["Maple 2"])[0], "MAPLE 2")
         self.assertIsNone(pr.match(["Murjan 1"])[0])
 
+    def test_building_name_beats_subcommunity(self):
+        db = dld_db([("a", "2026-09-01", "Sell", 0, "P", "THE CRESCENT", None, "Unit", "Flat", "2 B/R", 100, 1),
+                     ("b", "2026-09-01", "Sell", 0, "P", "ROYAL AMWAJ", None, "Unit", "Flat", "2 B/R", 100, 1)])
+        self.assertEqual(dld.Projects(db).match(["The Crescent", "Royal Amwaj Residences South"])[0], "ROYAL AMWAJ")
+
+    def test_flats_preferred_over_hotel_apartments(self):
+        import datetime as dt
+        d = (dt.date.today() - dt.timedelta(days=30)).isoformat()
+        rows = [(f"f{i}", d, "Sell", 0, "M", "Beach Mansion", None, "Unit", "Flat", "3 B/R", 153, 6_000_000) for i in range(3)]
+        rows += [(f"h{i}", d, "Sell", 0, "M", "Beach Mansion", None, "Unit", "Hotel Apartment", "3 B/R", 153, 12_000_000) for i in range(3)]
+        cs = dld.comps(dld_db(rows), "Beach Mansion", self.n)
+        self.assertEqual({c["value_aed"] for c in cs}, {6_000_000})
+
     def test_no_comps_no_signal_skip(self):
         db = dld_db([])
         n = dict(self.n, title="3BR", description="", pf_flags={})

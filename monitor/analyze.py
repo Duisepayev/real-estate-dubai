@@ -99,11 +99,12 @@ def verdict(n, r, a):
     enough = c and c["n"] >= a["min_comps"]
     if d is not None and d >= a["suspicious_discount"]:
         return "suspect"
-    if enough and d >= a["target_discount"]:
+    spread = (c["p75"] - c["p25"]) / c["median"] if c else None
+    if enough and d >= a["target_discount"] and spread <= a.get("max_spread", 0.35):
         return "target"
     signals = bool(r["keywords"]) or n.get("pf_flags", {}).get("is_price_drop") or n.get("pf_flags", {}).get("is_great_value")
     if d is not None and d >= a["target_discount"] and c["n"] >= 2:
-        return "review"  # дисконт есть, но сделок мало
+        return "review"  # дисконт есть, но сделок мало или они сильно разбросаны
     if d is not None and d >= a["review_discount"] and signals:
         return "review"
     peers = r.get("listing_peers")
