@@ -59,7 +59,7 @@ def run(cfg, args):
 
     sent = candidates = 0
     stats = {"target": 0, "review": 0, "suspect": 0, "skip": 0}
-    matches, unmatched, digest = Counter(), Counter(), []
+    matches, unmatched, digest, summary = Counter(), Counter(), [], []
     for n in collected:
         is_new, old_price, history = store.upsert(n)
     for n in collected:
@@ -71,8 +71,8 @@ def run(cfg, args):
          if r["project"] else unmatched.update([(n["search"], place)]))
         if args.verbose and r["verdict"] != "skip":
             c = r["comps"]
-            log(f"  {n['id']} {n['tower'] or n['subcommunity']} {n['bedrooms']}BR {n['size_sqm']}м² {notify.m(n['price_aed'])} "
-                f"→ {r['project']} ({r['match_score']:.2f}) comps={c['n'] if c else 0} disc={notify.pct(r['discount'])} {r['verdict']}")
+            summary.append(f"  {n['id']} {n['tower'] or n['subcommunity']} {n['bedrooms']}BR {n['size_sqm']}м² {notify.m(n['price_aed'])} "
+                f"→ {r['project']} ({r['match_score']:.2f}) comps={c['n'] if c else 0} disc={notify.pct(r['discount'])} {r['verdict']} {n['completion']} {','.join(r['keywords'])}")
         if r["verdict"] == "skip":
             continue
         candidates += 1
@@ -112,6 +112,7 @@ def run(cfg, args):
         except Exception as e:  # noqa: BLE001
             log(f"[notify] ошибка: {e}")
     if args.verbose:
+        log("[candidates]\n" + "\n".join(summary))
         log("[match] сопоставления (поиск, здание → проект DLD, объявлений):")
         for (srch, place, proj), k in sorted(matches.items()):
             log(f"   {srch} | {place} → {proj} ({k})")

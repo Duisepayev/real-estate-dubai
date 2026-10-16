@@ -85,9 +85,12 @@ _STOP = {"the", "at", "by", "residence", "residences", "tower", "towers", "build
          "phase", "and", "of", "in", "apartments", "villas", "estate"}
 
 
+_ROMAN = {"i": "1", "ii": "2", "iii": "3", "iv": "4", "v": "5", "vi": "6"}
+
+
 def tokens(s):
     s = (s or "").lower().replace("&", " ")
-    return {t for t in re.findall(r"[a-z]+|\d+", s) if t not in _STOP}
+    return {_ROMAN.get(t, t) for t in re.findall(r"[a-z]+|\d+", s) if t not in _STOP}
 
 
 def rooms_label(bedrooms):
@@ -114,6 +117,10 @@ class Projects:
         Все значимые слова проекта DLD должны встречаться в названиях объявления;
         из подходящих берётся самый конкретный (больше слов). Возвращает (project, score)."""
         nt = set().union(*(tokens(n) for n in names)) if names else set()
+        own = tokens(names[0]) if names else set()
+        for proj, _area, pt in self.rows:
+            if pt and pt == own:  # точное совпадение с названием здания («The 8»)
+                return proj, 1.0
         best, best_key = None, (0, 0.0)
         for proj, _area, pt in self.rows:
             # проект должен иметь хотя бы одно «настоящее» слово: «1 Residences», «The 8» не годятся
