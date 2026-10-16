@@ -1,0 +1,11 @@
+name: probe-sources
+on:
+  push:
+    branches: [claude/distress-monitoring-r71h6q]
+    paths: [probe/**, .github/workflows/probe.yml]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 probe/probe.py
