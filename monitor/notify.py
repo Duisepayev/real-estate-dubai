@@ -66,6 +66,8 @@ def format_listing(n, r, cost, history, change=None):
         lines.append(f"🏷 Метки PF: {', '.join(badges)}")
 
     if n.get("completion") == "off_plan":
+        ho = r.get("handover")
+        lines.append(f"🏗 Сдача: {'до ' + ho[:7] + ' (по тексту объявления)' if ho else 'срок в объявлении не указан — уточнить'}")
         lines.append("🏦 Off-plan: ипотека обычно недоступна до готовности; нужен график оставшихся платежей застройщику.")
     else:
         lines.append(f"🏦 Ипотека возможна для готового объекта (для вашего профиля self-employed — не гарантирована). "
@@ -105,8 +107,38 @@ def format_thread_post(post, info):
 
 # ---------- доставка ----------
 
+START_CODE = "/start monitor"  # ссылка t.me/<бот>?start=monitor присылает именно это
+_chat = {"id": None}
+
+
+def resolve_telegram_chat(store, log=print):
+    """chat_id берётся из секрета TELEGRAM_CHAT_ID, из сохранённого состояния или из
+    сообщения «/start monitor», которое владелец отправил боту (getUpdates хранит их ~24 ч)."""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat = os.environ.get("TELEGRAM_CHAT_ID") or (store.get_kv("telegram_chat_id") if store else None)
+    if token and not chat:
+        import json
+        try:
+            upd = json.loads(request(f"https://api.telegram.org/bot{token}/getUpdates?limit=100"))
+        except Exception as e:  # noqa: BLE001
+            log(f"[notify] Telegram getUpdates: ошибка {e}")
+            upd = {}
+        for u in reversed(upd.get("result", [])):
+            msg = u.get("message") or {}
+            if msg.get("chat", {}).get("type") == "private" and (msg.get("text") or "").strip() == START_CODE:
+                chat = str(msg["chat"]["id"])
+                if store:
+                    store.set_kv("telegram_chat_id", chat)
+                log("[notify] чат Telegram найден по сообщению /start monitor")
+                break
+        else:
+            log("[notify] чат Telegram не найден: откройте бота по ссылке ?start=monitor и нажмите Start")
+    _chat["id"] = chat
+    return chat
+
+
 def send_telegram(text):
-    token, chat = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
+    token, chat = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID") or _chat["id"]
     if not (token and chat):
         return False
     request(f"https://api.telegram.org/bot{token}/sendMessage", data={

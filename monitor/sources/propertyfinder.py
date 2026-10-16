@@ -116,7 +116,8 @@ def _matches(n, filters):
         return False
     if filters.get("max_price_aed") and n["price_aed"] > filters["max_price_aed"]:
         return False
-    if filters.get("bedrooms") and n["bedrooms"] not in filters["bedrooms"]:
+    beds = filters.get("bedrooms")
+    if beds and n["bedrooms"] not in beds and not (n["bedrooms"] is not None and 7 in beds and n["bedrooms"] > 7):
         return False
     types = filters.get("property_types")
     if types and n["property_type"] not in types:

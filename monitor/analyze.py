@@ -24,6 +24,38 @@ RISKS = {
 }
 
 
+_MONTHS = {m: i for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
+_HANDOVER = re.compile(
+    r"(?:hand[\s-]?over|handing\s+over|completion|delivery|ready\s+(?:in|by)|\bho\b|сдача|сдачи)"
+    r"[\s:\-–]*(?:in|by|on|date|expected|est\.?)?[\s:\-–]*"
+    r"(?:(q[1-4])|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*|(\d{1,2})[/.])?[\s,\-–]*('\d{2}|20\d{2})\b")
+
+
+def find_handover(text):
+    """Срок сдачи off-plan из текста объявления: 'Handover Q4 2026', 'handover June 2027', 'HO 2028'.
+    Возвращает ISO-дату конца периода или None."""
+    import calendar
+    best = None
+    for m in _HANDOVER.finditer((text or "").lower()):
+        q, mon, num, yr = m.groups()
+        yr = yr.lstrip("'")
+        year = int(yr) + 2000 if len(yr) == 2 else int(yr)
+        if not 2024 <= year <= 2035:
+            continue
+        if q:
+            month = int(q[1]) * 3
+        elif mon:
+            month = _MONTHS[mon[:3]]
+        elif num and 1 <= int(num) <= 12:
+            month = int(num)
+        else:
+            month = 12
+        d = f"{year}-{month:02d}-{calendar.monthrange(year, month)[1]:02d}"
+        best = max(best or d, d)
+    return best
+
+
 def find_keywords(text):
     t = (text or "").lower()
     found = set()
@@ -66,7 +98,8 @@ def costs(price, cfg, completion="ready"):
 def evaluate(n, dld_db, projects, store, cfg):
     a = cfg["alerts"]
     text = f"{n.get('title', '')}\n{n.get('description', '')}"
-    res = {"keywords": find_keywords(text), "risks": find_risks(text), "project": None, "match_score": 0,
+    res = {"keywords": find_keywords(text), "risks": find_risks(text),
+           "handover": find_handover(text) if n.get("completion") == "off_plan" else None, "project": None, "match_score": 0,
            "comps": None, "comp_list": [], "listing_peers": None, "discount": None, "fair": None}
     if n.get("price_aed") and n.get("size_sqm"):
         res["ppsqm"] = n["price_aed"] / n["size_sqm"]
@@ -87,6 +120,9 @@ def evaluate(n, dld_db, projects, store, cfg):
         res["fair"] = (c["p25"] * size, c["median"] * size, c["p75"] * size)
         res["discount"] = 1 - res["ppsqm"] / c["median"]
     res["verdict"] = verdict(n, res, a)
+    late = cfg["filters"].get("latest_handover")
+    if late and res["handover"] and res["handover"] > late:
+        res["verdict"] = "skip"  # сдача позже согласованного срока
     return res
 
 

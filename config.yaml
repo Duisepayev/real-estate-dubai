@@ -2,13 +2,14 @@
 # ВНИМАНИЕ: репозиторий публичный. Личные финансовые данные сюда не пишите —
 # их можно передать через секрет MONITOR_CONFIG_JSON (перекрывает поля этого файла).
 
-# ЧЕРНОВИК: бюджет, типы и спальни ещё НЕ согласованы с владельцем.
+# Согласовано с владельцем 16.10.2026.
 filters:
   min_price_aed: 1500000
-  max_price_aed: 5000000          # черновик, требует подтверждения
-  bedrooms: [2, 3, 4]             # черновик
+  max_price_aed: 5000000
+  bedrooms: [3, 4, 5, 6, 7]       # 3 и более (7 = 7+)
   property_types: [apartment, penthouse, townhouse, villa]
-  completion: [ready, off_plan]   # off_plan показывается с пометкой об оставшихся платежах
+  completion: [ready, off_plan]
+  latest_handover: "2027-06-30"   # off-plan со сдачей позже — не показывать; срок не указан — показывать с пометкой
   min_size_sqm: 0
 
 # Поисковые зоны Property Finder (id локаций проверены через API PF 16.10.2026).
@@ -49,7 +50,10 @@ schedule:
   request_delay_sec: 2.5
 
 threads:
-  enabled: true                 # работает только при наличии THREADS_ACCESS_TOKEN
+  enabled: true                 # официальный API (THREADS_ACCESS_TOKEN) или Apify (APIFY_TOKEN)
+  every_hours: 6                # реже, чем PF: у Apify оплата за каждый пост
+  apify_actor: ethereal_wool~threads-search-scraper
+  max_posts: 60                 # на один запуск, по всем ключевым словам
   keywords:
     - distress sale dubai
     - distressed deal dubai
@@ -59,3 +63,5 @@ threads:
     - below market dubai
     - срочная продажа дубай
     - ниже рынка дубай
+    - срочно продам квартиру дубай
+    - срочная продажа виллы дубай

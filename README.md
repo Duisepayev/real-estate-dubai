@@ -17,13 +17,15 @@
 | Вердикт | `target`: дисконт ≥ 20% при ≥ 3 сделках. `review`: дисконт есть, но сделок мало, или 12–20% с признаками срочности. `suspect`: дисконт ≥ 40% — вероятна ошибка, неполная цена или off-plan с долгом застройщику. Остальное не присылается. |
 | Дубли | Одно и то же помещение от разных агентов склеивается по ключу «здание + спальни + тип + площадь». Повторное уведомление — только при изменении цены ≥ 2% или повышении оценки. |
 | Состояние | `state.db` (объявления, история цен, отправленные уведомления) хранится в отдельной ветке `monitor-state`. |
-| Threads | Официальный Threads API `keyword_search`. Без App Review по `threads_keyword_search` ищет только собственные посты владельца токена. |
+| Threads | Раз в 6 часов. Официальный Threads API `keyword_search` (без App Review по `threads_keyword_search` видит только посты владельца токена) или актор Apify. В уведомление попадают посты с упоминанием целевых районов и ценой не выше бюджета (если цена указана). |
+| Срок сдачи | Для off-plan срок берётся из текста объявления («Handover Q4 2026»). Позже `latest_handover` — не присылается; не указан — присылается с пометкой. |
 
 ### Секреты (Settings → Secrets and variables → Actions)
 
-- Telegram: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+- Telegram: `TELEGRAM_BOT_TOKEN`. Чат определяется сам: откройте `https://t.me/<бот>?start=monitor` и нажмите Start (или задайте `TELEGRAM_CHAT_ID`).
 - E-mail (например, Gmail с паролем приложения): `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_USER`, `SMTP_PASSWORD`, `ALERT_EMAIL_TO`.
-- Необязательно: `THREADS_ACCESS_TOKEN`; `MONITOR_CONFIG_JSON` — JSON, перекрывающий `config.yaml` (например, бюджет, если не хочется держать его в публичном репозитории).
+- Threads: `THREADS_ACCESS_TOKEN` (официальный API, нужен App Review Meta) или `APIFY_TOKEN` (сторонний актор, платно за пост).
+- Необязательно: `MONITOR_CONFIG_JSON` — JSON, перекрывающий `config.yaml` (например, бюджет, если не хочется держать его в публичном репозитории).
 
 ### Ручной запуск
 

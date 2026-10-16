@@ -1,9 +1,12 @@
-"""Поиск публикаций в Threads через официальный Threads API (keyword_search).
+"""Поиск публикаций в Threads.
 
-Ограничения Meta: нужен токен пользователя с разрешениями threads_basic и
-threads_keyword_search. Пока приложение не прошло App Review по
-threads_keyword_search, поиск возвращает только собственные публикации
-владельца токена. Лимит — 2 200 запросов за 24 часа на пользователя.
+1. Официальный Threads API (keyword_search), если задан THREADS_ACCESS_TOKEN.
+   Нужны разрешения threads_basic и threads_keyword_search; пока приложение не
+   прошло App Review по threads_keyword_search, поиск видит только посты
+   владельца токена. Лимит — 2 200 запросов за 24 часа.
+2. Иначе — актор Apify (APIFY_TOKEN), который читает публичный поиск Threads.
+   Это сторонний сервис с оплатой за пост; правила Meta автоматический сбор
+   не разрешают.
 """
 import os
 import re
@@ -20,11 +23,41 @@ PLACES = ["emaar beachfront", "beachfront", "dubai harbour", "palm jumeirah", "p
           "пальм", "бичфронт", "дубай хиллс", "марина"]
 
 
-def search(keywords, since_ts, log=print):
-    token = os.environ.get("THREADS_ACCESS_TOKEN")
-    if not token:
-        log("[threads] THREADS_ACCESS_TOKEN не задан — источник пропущен")
+def search(keywords, since_ts, cfg=None, log=print):
+    cfg = cfg or {}
+    if os.environ.get("THREADS_ACCESS_TOKEN"):
+        return search_official(keywords, since_ts, log)
+    if os.environ.get("APIFY_TOKEN"):
+        return search_apify(keywords, since_ts, cfg.get("apify_actor"), cfg.get("max_posts", 60), log)
+    log("[threads] нет THREADS_ACCESS_TOKEN и APIFY_TOKEN — источник пропущен")
+    return []
+
+
+def search_apify(keywords, since_ts, actor, max_posts, log=print):
+    from ..http import request
+    import json
+    url = (f"https://api.apify.com/v2/acts/{actor}/run-sync-get-dataset-items?"
+           + urllib.parse.urlencode({"token": os.environ["APIFY_TOKEN"], "timeout": 240}))
+    try:
+        items = json.loads(request(url, data={"searchKeywords": keywords, "sort": "recent", "maxItems": max_posts},
+                                   timeout=300, retries=1))
+    except Exception as e:  # noqa: BLE001
+        log(f"[threads] Apify: ошибка {e}")
         return []
+    out = {}
+    for p in items if isinstance(items, list) else []:
+        ts = p.get("takenAt") or 0
+        if not p.get("text") or (ts and ts < since_ts):
+            continue
+        pid = str(p.get("postId") or p.get("code") or p.get("url"))
+        out[pid] = {"id": f"th:{pid}", "url": p.get("url"), "text": p["text"], "username": p.get("username"),
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M", time.gmtime(ts)) if ts else ""}
+    log(f"[threads] Apify: получено {len(items) if isinstance(items, list) else 0}, новых {len(out)}")
+    return list(out.values())
+
+
+def search_official(keywords, since_ts, log=print):
+    token = os.environ["THREADS_ACCESS_TOKEN"]
     out = {}
     for kw in keywords:
         q = {"q": kw, "search_type": "RECENT", "fields": FIELDS, "limit": 50,

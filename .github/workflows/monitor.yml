@@ -45,6 +45,7 @@ jobs:
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
       THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+      APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
       # push в рабочую ветку = пробный прогон без отправки и без сохранения состояния
       DRY: ${{ github.event_name == 'push' || inputs.dry_run == true }}
       COMMAND: ${{ inputs.command || 'run' }}
@@ -94,9 +95,10 @@ jobs:
           key: dld-v1-${{ github.run_id }}
 
       - name: Save state
-        if: env.DRY != 'true' && env.COMMAND == 'run'
+        if: env.DRY != 'true'
         run: |
           cd state
+          [ -f state.db ] || exit 0
           git init -q
           git checkout -q --orphan monitor-state
           git add state.db

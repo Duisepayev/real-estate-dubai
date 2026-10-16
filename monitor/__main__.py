@@ -34,6 +34,8 @@ def should_notify(store, key, n, verdict, cfg):
 
 def run(cfg, args):
     store = Store(state_dir() / "state.db")
+    if not args.dry_run:
+        notify.resolve_telegram_chat(store, log=log)
     ddb = dld.connect(data_dir() / "dld.db")
     if not args.skip_dld:
         try:
@@ -135,13 +137,16 @@ def run(cfg, args):
 
     # Threads
     tcfg = cfg.get("threads") or {}
-    if tcfg.get("enabled"):
+    last_t = float(store.get_kv("threads_last_run") or 0)
+    if tcfg.get("enabled") and (args.full or time.time() - last_t >= tcfg.get("every_hours", 4) * 3600 - 600):
         since = float(store.get_kv("threads_since") or (time.time() - 2 * 86400))
-        posts = threads.search(tcfg["keywords"], since, log=log)
+        posts = threads.search(tcfg["keywords"], since, cfg=tcfg, log=log)
         tsent = 0
         for p in posts:
             info = threads.extract(p["text"])
             if not info["places"] or store.last_notification(p["id"]):
+                continue
+            if info["prices"] and min(info["prices"]) > cfg["filters"]["max_price_aed"]:
                 continue
             try:
                 notify.deliver("[Dubai deals] Threads", notify.format_thread_post(p, info), dry_run=args.dry_run, log=log)
@@ -153,6 +158,7 @@ def run(cfg, args):
         log(f"[threads] постов {len(posts)}, уведомлений {tsent}")
         if not args.dry_run:
             store.set_kv("threads_since", str(time.time() - 600))
+            store.set_kv("threads_last_run", str(time.time()))
     if not args.dry_run:
         store.set_kv("last_run", now())
     store.commit()
@@ -160,6 +166,10 @@ def run(cfg, args):
 
 
 def test_notify(cfg, args):
+    store = Store(state_dir() / "state.db")
+    if not args.dry_run:
+        notify.resolve_telegram_chat(store, log=log)
+        store.commit()
     text = ("<b>✅ Тест мониторинга distress-сделок</b>\n"
             f"Канал доставки работает. Время: {now()} UTC.\n"
             f"Фильтр: {notify.m(cfg['filters']['min_price_aed'])}–{notify.m(cfg['filters']['max_price_aed'])} AED, "

@@ -99,6 +99,22 @@ class T(unittest.TestCase):
         off = analyze.costs(4_000_000, self.cfg, "off_plan")
         self.assertEqual(off["dp_pct"], 0.5)
 
+    def test_handover(self):
+        self.assertEqual(analyze.find_handover("Hot deal | Handover 2028"), "2028-12-31")
+        self.assertEqual(analyze.find_handover("handover Q2 2027, 60/40 plan"), "2027-06-30")
+        self.assertEqual(analyze.find_handover("Handover: June 2027"), "2027-06-30")
+        self.assertIsNone(analyze.find_handover("Spacious 3BR, park view"))
+
+    def test_late_handover_skipped(self):
+        import datetime as dt
+        d = (dt.date.today() - dt.timedelta(days=30)).isoformat()
+        rows = [(f"t{i}", d, "Sell", 1, "M", "Beach Mansion", None, "Unit", "Flat", "3 B/R", 153, 6_000_000) for i in range(5)]
+        db = dld_db(rows)
+        n = dict(self.n, completion="off_plan", title="Below OP | Handover Q4 2028")
+        self.assertEqual(analyze.evaluate(n, db, dld.Projects(db), None, self.cfg)["verdict"], "skip")
+        n = dict(n, title="Below OP | Handover Q1 2027")
+        self.assertEqual(analyze.evaluate(n, db, dld.Projects(db), None, self.cfg)["verdict"], "target")
+
     def test_risks(self):
         self.assertTrue(analyze.find_risks("Tenanted until June, 40% paid, post-handover payment plan"))
 
@@ -106,6 +122,29 @@ class T(unittest.TestCase):
         i = threads.extract("Urgent sale Palm Jumeirah 3BR AED 3.2M, below market")
         self.assertEqual(i["prices"], [3_200_000])
         self.assertIn("palm jumeirah", i["places"])
+
+    def test_telegram_chat_discovery(self):
+        import json, os
+        from unittest import mock
+        upd = {"result": [{"message": {"chat": {"id": 111, "type": "private"}, "text": "hi"}},
+                          {"message": {"chat": {"id": 222, "type": "private"}, "text": "/start monitor"}}]}
+        s = Store(":memory:")
+        with mock.patch.dict(os.environ, {"TELEGRAM_BOT_TOKEN": "x"}, clear=False), \
+                mock.patch.object(notify, "request", return_value=json.dumps(upd)):
+            os.environ.pop("TELEGRAM_CHAT_ID", None)
+            self.assertEqual(notify.resolve_telegram_chat(s, log=lambda *a: None), "222")
+        self.assertEqual(s.get_kv("telegram_chat_id"), "222")
+
+    def test_threads_apify_mapping(self):
+        import json, os
+        from unittest import mock
+        from monitor import http
+        items = [{"postId": "9", "url": "https://www.threads.net/@a/post/x", "text": "Urgent sale Palm Jumeirah 3BR AED 4.5M",
+                  "username": "a", "takenAt": 2_000_000_000}, {"postId": "8", "text": "old", "takenAt": 1}]
+        with mock.patch.dict(os.environ, {"APIFY_TOKEN": "t"}), mock.patch.object(http, "request", return_value=json.dumps(items)):
+            os.environ.pop("THREADS_ACCESS_TOKEN", None)
+            posts = threads.search(["urgent sale dubai"], 1_000_000_000, cfg={"apify_actor": "a~b"}, log=lambda *a: None)
+        self.assertEqual([p["id"] for p in posts], ["th:9"])
 
     def test_store_dedup_and_history(self):
         s = Store(":memory:")
