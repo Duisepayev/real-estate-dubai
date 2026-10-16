@@ -4,6 +4,7 @@ import datetime as dt
 import json
 import sys
 import time
+from collections import Counter
 
 from . import analyze, dld, notify
 from .config import data_dir, load_config, state_dir
@@ -58,13 +59,17 @@ def run(cfg, args):
 
     sent = candidates = 0
     stats = {"target": 0, "review": 0, "suspect": 0, "skip": 0}
+    matches, unmatched, digest = Counter(), Counter(), []
     for n in collected:
         is_new, old_price, history = store.upsert(n)
     for n in collected:
         history = store.history(n["id"])
         r = analyze.evaluate(n, ddb, projects, store, cfg)
         stats[r["verdict"]] += 1
-        if args.verbose:
+        place = n.get("tower") or n.get("subcommunity")
+        (matches.__setitem__((n["search"], place, r["project"]), matches[(n["search"], place, r["project"])] + 1)
+         if r["project"] else unmatched.update([(n["search"], place)]))
+        if args.verbose and r["verdict"] != "skip":
             c = r["comps"]
             log(f"  {n['id']} {n['tower'] or n['subcommunity']} {n['bedrooms']}BR {n['size_sqm']}м² {notify.m(n['price_aed'])} "
                 f"→ {r['project']} ({r['match_score']:.2f}) comps={c['n'] if c else 0} disc={notify.pct(r['discount'])} {r['verdict']}")
@@ -80,8 +85,9 @@ def run(cfg, args):
         cost = analyze.costs(n["price_aed"], cfg, n["completion"])
         text = notify.format_listing(n, r, cost, history, change)
         if first_run and not args.dry_run and not args.notify_initial:
-            # первый запуск: запоминаем базу, но не заваливаем уведомлениями
+            # первый запуск: запоминаем базу и шлём одну сводку вместо десятков сообщений
             store.record_notification(key, n["id"], n["price_aed"], r["verdict"])
+            digest.append((r["discount"] or 0, n, r))
             continue
         try:
             notify.deliver(f"[Dubai deals] {n['title'][:60]}", text, dry_run=args.dry_run, log=log)
@@ -90,6 +96,23 @@ def run(cfg, args):
             sent += 1
         except Exception as e:  # noqa: BLE001
             log(f"[notify] ошибка: {e}")
+    if digest:
+        digest.sort(key=lambda x: -x[0])
+        lines = [f"<b>Мониторинг: стартовая база</b>\nСохранено {len(collected)} объявлений, кандидатов {len(digest)}. "
+                 "Дальше будут приходить только новые объекты и изменения цен. Топ по дисконту к сделкам DLD:"]
+        for d, n, r in digest[:8]:
+            lines.append(f"• {notify.VERDICT[r['verdict']].split(' ', 1)[0]} <a href=\"{n['url']}\">{n.get('tower') or n.get('subcommunity')}</a>, "
+                         f"{n['bedrooms']} сп., {n['size_sqm']} м², {notify.m(n['price_aed'])} AED, дисконт {notify.pct(r['discount'])} "
+                         f"({r['comps']['n'] if r['comps'] else 0} сделок)")
+        try:
+            notify.deliver("[Dubai deals] Стартовая сводка", "\n".join(lines), log=log)
+        except Exception as e:  # noqa: BLE001
+            log(f"[notify] ошибка: {e}")
+    if args.verbose:
+        log("[match] сопоставления (поиск, здание → проект DLD, объявлений):")
+        for (srch, place, proj), k in sorted(matches.items()):
+            log(f"   {srch} | {place} → {proj} ({k})")
+        log("[match] не сопоставлены: " + "; ".join(f"{srch} | {place} ({k})" for (srch, place), k in unmatched.most_common()))
     if full:
         gone = store.mark_inactive("propertyfinder", {n["id"] for n in collected}, [s["name"] for s in cfg["searches"]])
         log(f"[pf] снято с публикации/вне фильтра: {gone}")

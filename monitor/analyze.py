@@ -26,12 +26,13 @@ RISKS = {
 
 def find_keywords(text):
     t = (text or "").lower()
-    out = []
+    found = set()
     for p in URGENCY:
         m = re.search(p, t)
         if m:
-            out.append(m.group(0).strip())
-    return sorted(set(out))
+            found.add(m.group(0).strip())
+    # «urgent» не показываем, если уже есть «urgent sale»
+    return sorted(k for k in found if not any(k != o and k in o for o in found))
 
 
 def find_risks(text):
@@ -69,7 +70,7 @@ def evaluate(n, dld_db, projects, store, cfg):
            "comps": None, "comp_list": [], "listing_peers": None, "discount": None, "fair": None}
     if n.get("price_aed") and n.get("size_sqm"):
         res["ppsqm"] = n["price_aed"] / n["size_sqm"]
-    names = [x for x in [n.get("tower"), n.get("subcommunity")] if x]
+    names = n.get("match_names") or [x for x in [n.get("tower"), n.get("subcommunity")] if x]
     if names and dld_db is not None:
         proj, score = projects.match(names)
         res["project"], res["match_score"] = proj, score
@@ -100,9 +101,9 @@ def verdict(n, r, a):
         return "suspect"
     if enough and d >= a["target_discount"]:
         return "target"
-    if d is not None and d >= a["target_discount"]:
-        return "review"  # дисконт есть, но сделок мало
     signals = bool(r["keywords"]) or n.get("pf_flags", {}).get("is_price_drop") or n.get("pf_flags", {}).get("is_great_value")
+    if d is not None and d >= a["target_discount"] and c["n"] >= 2:
+        return "review"  # дисконт есть, но сделок мало
     if d is not None and d >= a["review_discount"] and signals:
         return "review"
     peers = r.get("listing_peers")

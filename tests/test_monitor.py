@@ -60,6 +60,17 @@ class T(unittest.TestCase):
         proj, score = dld.Projects(db).match(["Beach Mansion Tower 1"])
         self.assertIsNone(proj)
 
+    def test_match_requires_all_project_words(self):
+        db = dld_db([("x", "2026-09-01", "Sell", 0, "A", "Baystar by VIDA", None, "Unit", "Flat", "2 B/R", 100, 1),
+                     ("y", "2026-09-01", "Sell", 0, "A", "ACACIA AT PARK HEIGHTS", None, "Unit", "Flat", "2 B/R", 100, 1),
+                     ("z", "2026-09-01", "Sell", 0, "A", "MAPLE", None, "Unit", "Villa", "3 B/R", 100, 1),
+                     ("w", "2026-09-01", "Sell", 0, "A", "MAPLE 2", None, "Unit", "Villa", "3 B/R", 100, 1)])
+        pr = dld.Projects(db)
+        self.assertIsNone(pr.match(["Vida Residences"])[0])
+        self.assertIsNone(pr.match(["Park Heights 2 Tower 2", "Park Heights 2", "Park Heights"])[0])
+        self.assertEqual(pr.match(["Acacia A", "Acacia", "Park Heights"])[0], "ACACIA AT PARK HEIGHTS")
+        self.assertEqual(pr.match(["Maple 2"])[0], "MAPLE 2")
+
     def test_no_comps_no_signal_skip(self):
         db = dld_db([])
         n = dict(self.n, title="3BR", description="", pf_flags={})

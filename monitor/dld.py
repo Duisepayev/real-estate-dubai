@@ -109,28 +109,19 @@ class Projects:
         self.rows = [(p, a, tokens(p)) for p, a in
                      db.execute("SELECT project, area FROM tx WHERE project IS NOT NULL GROUP BY project, area")]
 
-    def match(self, names, areas=None):
-        """Ищет проект DLD по названиям башни/сабкомьюнити из объявления.
-        Возвращает (project, score) или (None, 0)."""
-        best = (None, 0.0)
-        for name in names:
-            nt = tokens(name)
-            if not nt:
+    def match(self, names):
+        """Ищет проект DLD по названиям из объявления (башня, сабкомьюнити и т.п.).
+        Все значимые слова проекта DLD должны встречаться в названиях объявления;
+        из подходящих берётся самый конкретный (больше слов). Возвращает (project, score)."""
+        nt = set().union(*(tokens(n) for n in names)) if names else set()
+        best, best_key = None, (0, 0.0)
+        for proj, _area, pt in self.rows:
+            if not pt or not pt <= nt:
                 continue
-            for proj, area, pt in self.rows:
-                if not pt or (areas and area not in areas and not (nt & pt)):
-                    continue
-                inter = len(nt & pt)
-                if not inter:
-                    continue
-                score = inter / len(nt | pt)
-                # цифры (номер корпуса) должны совпадать, если указаны с обеих сторон
-                nd, pd = {t for t in nt if t.isdigit()}, {t for t in pt if t.isdigit()}
-                if nd and pd and not (nd & pd):
-                    score *= 0.4
-                if score > best[1]:
-                    best = (proj, score)
-        return best if best[1] >= 0.5 else (None, 0.0)
+            key = (len(pt), len(pt) / len(nt))
+            if key > best_key:
+                best, best_key = proj, key
+        return (best, best_key[1]) if best else (None, 0.0)
 
 
 def comps(db, project, listing, months=12, size_tol=0.25):

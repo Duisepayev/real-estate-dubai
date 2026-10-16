@@ -72,6 +72,10 @@ def normalize(item):
     tree = p.get("location_tree") or []
     names = [t.get("name") for t in tree if t.get("name")]
     community = next((t["name"] for t in tree if t.get("type") == "COMMUNITY"), None)
+    # названия ниже уровня комьюнити — для сопоставления с проектами DLD
+    below = [t["name"] for t in tree if t.get("type") not in ("CITY", "COMMUNITY") and t.get("name")]
+    if loc.get("name") and loc.get("type") not in ("CITY", "COMMUNITY") and loc["name"] not in below:
+        below.append(loc["name"])
     sub = next((t["name"] for t in tree if t.get("type") == "SUBCOMMUNITY"), None)
     tower = loc.get("name") if loc.get("type") in ("TOWER", "SUBCOMMUNITY") else None
     ptype = (p.get("property_type") or "").lower()
@@ -93,7 +97,7 @@ def normalize(item):
         "community": community,
         "subcommunity": sub,
         "tower": tower,
-        "location_names": names + ([loc.get("name")] if loc.get("name") and loc.get("name") not in names else []),
+        "match_names": below,
         "listed_at": p.get("listed_date"),
         "refreshed_at": p.get("last_refreshed_at"),
         "agent": (p.get("agent") or {}).get("name"),
