@@ -82,7 +82,7 @@ jobs:
           [ "$DRY" = "true" ] && flags="$flags --dry-run"
           if [ "$COMMAND" = "run" ]; then
             [ "${{ inputs.full }}" = "true" ] && flags="$flags --full"
-            [ "${{ github.event_name }}" = "push" ] && flags="$flags --full --verbose"
+            [ "${{ github.event_name }}" = "push" ] && flags="$flags --full --verbose --show 4"
           fi
           python -m monitor "$COMMAND" $flags
 

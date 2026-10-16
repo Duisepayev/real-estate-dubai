@@ -116,12 +116,20 @@ class Projects:
         nt = set().union(*(tokens(n) for n in names)) if names else set()
         best, best_key = None, (0, 0.0)
         for proj, _area, pt in self.rows:
-            if not pt or not pt <= nt:
+            # проект должен иметь хотя бы одно «настоящее» слово: «1 Residences», «The 8» не годятся
+            if not pt or not pt <= nt or not any(len(t) >= 3 and t.isalpha() for t in pt):
                 continue
             key = (len(pt), len(pt) / len(nt))
             if key > best_key:
                 best, best_key = proj, key
         return (best, best_key[1]) if best else (None, 0.0)
+
+
+def area_profile(db, areas):
+    """Диагностика: какие проекты/мастер-проекты DLD встречаются в районах."""
+    q = ("SELECT area, COALESCE(master_project,'-'), COALESCE(project,'(нет проекта)'), COUNT(*) FROM tx "
+         "WHERE area IN (%s) GROUP BY 1,2,3 ORDER BY 4 DESC LIMIT 60" % ",".join("?" * len(areas)))
+    return db.execute(q, areas).fetchall()
 
 
 def comps(db, project, listing, months=12, size_tol=0.25):

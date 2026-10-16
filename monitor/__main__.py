@@ -90,6 +90,9 @@ def run(cfg, args):
             digest.append((r["discount"] or 0, n, r))
             continue
         try:
+            if args.dry_run and candidates > args.show:
+                sent += 1
+                continue
             notify.deliver(f"[Dubai deals] {n['title'][:60]}", text, dry_run=args.dry_run, log=log)
             if not args.dry_run:
                 store.record_notification(key, n["id"], n["price_aed"], r["verdict"])
@@ -112,6 +115,10 @@ def run(cfg, args):
         log("[match] сопоставления (поиск, здание → проект DLD, объявлений):")
         for (srch, place, proj), k in sorted(matches.items()):
             log(f"   {srch} | {place} → {proj} ({k})")
+        areas = sorted({a for s_ in cfg["searches"] for a in s_.get("dld_areas", [])})
+        log("[dld] профиль районов (район | мастер-проект | проект | сделок):")
+        for row in dld.area_profile(ddb, areas):
+            log("   " + " | ".join(map(str, row)))
         log("[match] не сопоставлены: " + "; ".join(f"{srch} | {place} ({k})" for (srch, place), k in unmatched.most_common()))
     if full:
         gone = store.mark_inactive("propertyfinder", {n["id"] for n in collected}, [s["name"] for s in cfg["searches"]])
@@ -165,6 +172,7 @@ def main(argv=None):
     ap.add_argument("--skip-dld", action="store_true")
     ap.add_argument("--notify-initial", action="store_true", help="рассылать и при первом запуске")
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--show", type=int, default=10**6, help="dry-run: сколько уведомлений печатать целиком")
     args = ap.parse_args(argv)
     cfg = load_config()
     if args.command == "run":
