@@ -2,7 +2,7 @@ name: distress-monitor
 
 on:
   schedule:
-    - cron: "17 */2 * * *"   # каждые 2 часа (UTC); GitHub может задерживать запуск
+    - cron: "23 1-23/2 * * *"   # каждые 2 часа (UTC, нечётные часы); GitHub может задерживать запуск
   workflow_dispatch:
     inputs:
       command:
