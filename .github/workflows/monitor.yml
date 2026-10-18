@@ -1,0 +1,107 @@
+name: distress-monitor
+
+on:
+  schedule:
+    - cron: "17 */2 * * *"   # каждые 2 часа (UTC); GitHub может задерживать запуск
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "run — проверка объявлений, test-notify — тестовое уведомление"
+        type: choice
+        options: [run, test-notify]
+        default: run
+      dry_run:
+        description: "Не отправлять уведомления, только показать в логе"
+        type: boolean
+        default: false
+      full:
+        description: "Полный обход (иначе — только новые)"
+        type: boolean
+        default: false
+  push:
+    branches: [claude/distress-monitoring-r71h6q]
+    paths: [monitor/**, tests/**, config.yaml, .github/workflows/monitor.yml]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: distress-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      MONITOR_DATA_DIR: data
+      MONITOR_STATE_DIR: state
+      MONITOR_CONFIG_JSON: ${{ secrets.MONITOR_CONFIG_JSON }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+      THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+      APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+      # push в рабочую ветку = пробный прогон без отправки и без сохранения состояния
+      DRY: ${{ github.event_name == 'push' || inputs.dry_run == true }}
+      COMMAND: ${{ inputs.command || 'run' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Restore DLD transactions cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/dld.db
+          key: dld-v1-${{ github.run_id }}
+          restore-keys: dld-v1-
+
+      - name: Load state
+        run: |
+          mkdir -p state data
+          if git fetch --depth=1 origin monitor-state 2>/dev/null; then
+            git show FETCH_HEAD:state.db > state/state.db && echo "state loaded"
+          else
+            echo "no saved state yet"
+          fi
+
+      - name: Run
+        run: |
+          flags=""
+          [ "$DRY" = "true" ] && flags="$flags --dry-run"
+          if [ "$COMMAND" = "run" ]; then
+            [ "${{ inputs.full }}" = "true" ] && flags="$flags --full"
+            [ "${{ github.event_name }}" = "push" ] && flags="$flags --full --verbose --show 4"
+          fi
+          python -m monitor "$COMMAND" $flags
+
+      - name: Save DLD transactions cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/dld.db
+          key: dld-v1-${{ github.run_id }}
+
+      - name: Save state
+        if: env.DRY != 'true'
+        run: |
+          cd state
+          [ -f state.db ] || exit 0
+          git init -q
+          git checkout -q --orphan monitor-state
+          git add state.db
+          git -c user.name="distress-monitor" -c user.email="actions@users.noreply.github.com" \
+            commit -qm "state $(date -u +%FT%TZ)"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD:monitor-state

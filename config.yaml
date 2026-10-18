@@ -1,0 +1,67 @@
+# Настройки мониторинга distress-сделок.
+# ВНИМАНИЕ: репозиторий публичный. Личные финансовые данные сюда не пишите —
+# их можно передать через секрет MONITOR_CONFIG_JSON (перекрывает поля этого файла).
+
+# Согласовано с владельцем 16.10.2026.
+filters:
+  min_price_aed: 1500000
+  max_price_aed: 5000000
+  bedrooms: [3, 4, 5, 6, 7]       # 3 и более (7 = 7+)
+  property_types: [apartment, penthouse, townhouse, villa]
+  completion: [ready, off_plan]
+  latest_handover: "2027-06-30"   # off-plan со сдачей позже — не показывать; срок не указан — показывать с пометкой
+  min_size_sqm: 0
+
+# Поисковые зоны Property Finder (id локаций проверены через API PF 16.10.2026).
+searches:
+  - {name: Emaar Beachfront, pf_location_id: 9755, dld_areas: ["MARSA DUBAI", "Dubai Harbour"]}
+  - {name: Palm Jumeirah, pf_location_id: 86, dld_areas: ["PALM JUMEIRAH"]}
+  - {name: JBR, pf_location_id: 67, dld_areas: ["MARSA DUBAI"]}
+  - {name: Dubai Hills Estate, pf_location_id: 105, dld_areas: ["Hadaeq Sheikh Mohammed Bin Rashid", "DUBAI HILLS"]}
+
+# Порог уведомления
+alerts:
+  target_discount: 0.20         # 20% к медиане сопоставимых сделок
+  review_discount: 0.12         # от 12% — «кандидат на проверку», если есть признаки срочности
+  min_comps: 3                  # минимум сделок для уверенной оценки
+  max_spread: 0.35              # разброс (p75−p25)/медиана; больше — только «на проверку»
+  comps_months: 12
+  size_tolerance: 0.25          # ±25% площади
+  suspicious_discount: 0.40     # дисконт больше — вероятная ошибка/неполная цена
+  renotify_price_change: 0.02   # повторно уведомлять при изменении цены ≥2%
+
+# Предварительный расчёт собственных средств (допущения, не банковское предложение)
+finance:
+  down_payment_pct: 0.35        # ранее обсуждали 35–40%
+  rates: [0.045, 0.055]         # примеры ставок, не предложения банков
+  term_years: 25
+  agency_fee_pct: 0.02          # + 5% VAT
+  bank_fee_pct: 0.01            # оценка сверху, + 5% VAT
+  valuation_fee_aed: 3150
+  trustee_fee_aed: 4200
+  dld_admin_aed: 580
+  mortgage_reg_pct: 0.0025
+  mortgage_reg_admin_aed: 290
+
+schedule:
+  quick_pages: 2                # страниц «новые сначала» за каждый запуск
+  full_sweep_pages: 25          # раз в сутки — полный обход для отслеживания цен
+  full_sweep_every_hours: 20
+  request_delay_sec: 2.5
+
+threads:
+  enabled: true                 # официальный API (THREADS_ACCESS_TOKEN) или Apify (APIFY_TOKEN)
+  every_hours: 6                # реже, чем PF: у Apify оплата за каждый пост
+  apify_actor: ethereal_wool~threads-search-scraper
+  max_posts: 60                 # на один запуск, по всем ключевым словам
+  keywords:
+    - distress sale dubai
+    - distressed deal dubai
+    - urgent sale dubai
+    - motivated seller dubai
+    - must sell dubai
+    - below market dubai
+    - срочная продажа дубай
+    - ниже рынка дубай
+    - срочно продам квартиру дубай
+    - срочная продажа виллы дубай
