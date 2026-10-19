@@ -112,19 +112,29 @@ class Projects:
         self.rows = [(p, a, tokens(p)) for p, a in
                      db.execute("SELECT project, area FROM tx WHERE project IS NOT NULL GROUP BY project, area")]
 
-    def match(self, names):
+    def match(self, names, areas=None):
         """Ищет проект DLD по названиям из объявления (башня, сабкомьюнити и т.п.).
         Все значимые слова проекта DLD должны встречаться в названиях объявления;
         из подходящих берётся самый конкретный (больше слов). Возвращает (project, score)."""
+        rows = self.rows
+        if areas:  # только проекты районов DLD этой зоны: «Ocean Tower» из другого района не подходит
+            up = {a.upper() for a in areas}
+            rows = [r for r in rows if (r[1] or "").upper() in up]
         nt = set().union(*(tokens(n) for n in names)) if names else set()
         own = tokens(names[-1]) if names else set()  # последнее — само здание
-        for proj, _area, pt in self.rows:
+        for proj, _area, pt in rows:
             if pt and pt == own:  # точное совпадение с названием здания («The 8»)
                 return proj, 1.0
         best, best_key = None, (0, 0.0)
-        for proj, _area, pt in self.rows:
+        for proj, _area, pt in rows:
             # проект должен иметь хотя бы одно «настоящее» слово: «1 Residences», «The 8» не годятся
             if not pt or not pt <= nt or not any(len(t) >= 3 and t.isalpha() for t in pt):
+                continue
+            # проект должен покрывать больше половины слов хотя бы одного названия: «Ocean Tower»
+            # не подходит к «Ocean Pearl», «Dubai Creek Residences» — к «Cedar at Creek Beach»
+            # (номера корпусов и буквы «Tower A» не считаем)
+            if not any(tn and len(pt & tn) / len(tn) > 0.5 for tn in
+                       ({t for t in tokens(x) if t.isalpha() and len(t) > 1} for x in names)):
                 continue
             key = (len(pt), len(pt) / len(nt))
             if key > best_key:

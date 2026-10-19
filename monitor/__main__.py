@@ -52,6 +52,7 @@ def run(cfg, args):
 
     pf_seen = store.ids("propertyfinder")
     first_run = not pf_seen
+    known = store.searches()  # новые зоны тоже начинают со сводки, а не с пачки сообщений
     collected = []
     for s in cfg["searches"]:
         collected += pf.collect(s, cfg["filters"], sch["full_sweep_pages"] if full else sch["quick_pages"],
@@ -84,9 +85,10 @@ def run(cfg, args):
             continue
         if len(history) > 1 and not change:
             change = "Цена снижена" if history[-1][1] < history[0][1] else "Цена изменилась"
-        cost = analyze.costs(n["price_aed"], cfg, n["completion"])
+        emirate = next((s_.get("emirate", "dubai") for s_ in cfg["searches"] if s_["name"] == n.get("search")), "dubai")
+        cost = analyze.costs(n["price_aed"], cfg, n["completion"], emirate)
         text = notify.format_listing(n, r, cost, history, change)
-        if first_run and not args.dry_run and not args.notify_initial:
+        if (first_run or n["search"] not in known) and not args.dry_run and not args.notify_initial:
             # первый запуск: запоминаем базу и шлём одну сводку вместо десятков сообщений
             store.record_notification(key, n["id"], n["price_aed"], r["verdict"])
             digest.append((r["discount"] or 0, n, r))
@@ -107,7 +109,10 @@ def run(cfg, args):
         for item in digest:  # один объект от разных агентов — одна строка
             uniq.setdefault(item[1]["fingerprint"], item)
         digest = list(uniq.values())
-        lines = [f"<b>Мониторинг: стартовая база</b>\nСохранено {len(collected)} объявлений, кандидатов {len(digest)}. "
+        zones = sorted({n["search"] for n in collected if n["search"] not in known})
+        head = "Мониторинг: стартовая база" if first_run else "Новые районы: стартовая база (" + ", ".join(zones) + ")"
+        base = len(collected) if first_run else sum(1 for n in collected if n["search"] not in known)
+        lines = [f"<b>{head}</b>\nСохранено {base} объявлений, кандидатов {len(digest)}. "
                  "Дальше будут приходить только новые объекты и изменения цен. Топ по дисконту к сделкам DLD:"]
         for d, n, r in digest[:8]:
             lines.append(f"• {notify.VERDICT[r['verdict']].split(' ', 1)[0]} <a href=\"{n['url']}\">{n.get('tower') or n.get('subcommunity')}</a>, "
@@ -127,7 +132,7 @@ def run(cfg, args):
         for row in dld.area_profile(ddb, areas):
             log("   " + " | ".join(map(str, row)))
         log("[dld] названия районов (район | сделок | без проекта): " + "; ".join(
-            " | ".join(map(str, r)) for r in dld.area_names(ddb, ["MARSA", "JUMEIRA", "HARBOUR", "ISLAND", "DEIRA"])))
+            " | ".join(map(str, r)) for r in dld.area_names(ddb, ["MARSA", "JUMEIRA", "HARBOUR", "ISLAND", "DEIRA", "RANCH", "CREEK", "JEBEL", "RASHID", "GHAF", "SPRING", "MEADOW", "HEBIAH", "SAFA", "THANYAH", "MARSA"])))
         log("[match] не сопоставлены: " + "; ".join(f"{srch} | {place} ({k})" for (srch, place), k in unmatched.most_common()))
     if full:
         gone = store.mark_inactive("propertyfinder", {n["id"] for n in collected}, [s["name"] for s in cfg["searches"]])

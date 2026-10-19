@@ -72,7 +72,7 @@ def find_risks(text):
     return [msg for key, (p, msg) in RISKS.items() if re.search(p, t)]
 
 
-def costs(price, cfg, completion="ready"):
+def costs(price, cfg, completion="ready", emirate="dubai"):
     """Предварительная сумма собственных средств и платёж. Ставки — примеры."""
     f = cfg["finance"]
     dp_pct = f["down_payment_pct"]
@@ -80,7 +80,9 @@ def costs(price, cfg, completion="ready"):
     reg_min = 0.5 if completion == "off_plan" else (0.2 if price <= 5_000_000 else 0.3)
     dp_pct = max(dp_pct, reg_min)
     loan = price * (1 - dp_pct)
-    dld_fee = price * 0.04 + f["dld_admin_aed"]
+    # регистрация: Дубай — DLD 4%, Абу-Даби — ADREC 2%
+    reg_pct = 0.02 if emirate == "abu_dhabi" else 0.04
+    dld_fee = price * reg_pct + f["dld_admin_aed"]
     agency = price * f["agency_fee_pct"] * 1.05
     bank = loan * f["bank_fee_pct"] * 1.05
     mreg = loan * f["mortgage_reg_pct"] + f["mortgage_reg_admin_aed"]
@@ -91,7 +93,7 @@ def costs(price, cfg, completion="ready"):
         i = r / 12
         pays.append((r, loan * i / (1 - (1 + i) ** -n)))
     return {"dp_pct": dp_pct, "down": price * dp_pct, "loan": loan, "fees": fees, "dld_fee": dld_fee,
-            "agency": agency, "bank": bank, "own_funds": price * dp_pct + fees, "payments": pays,
+            "agency": agency, "reg_pct": reg_pct, "emirate": emirate, "bank": bank, "own_funds": price * dp_pct + fees, "payments": pays,
             "cash_total": price + dld_fee + agency + f["trustee_fee_aed"]}
 
 
@@ -103,9 +105,12 @@ def evaluate(n, dld_db, projects, store, cfg):
            "comps": None, "basis": "project", "comp_list": [], "listing_peers": None, "discount": None, "fair": None}
     if n.get("price_aed") and n.get("size_sqm"):
         res["ppsqm"] = n["price_aed"] / n["size_sqm"]
+    if any(s.get("emirate") == "abu_dhabi" for s in cfg["searches"] if s["name"] == n.get("search")):
+        dld_db = None  # сделки Абу-Даби в DLD не попадают; не сравниваем с одноимёнными проектами Дубая
     names = n.get("match_names") or [x for x in [n.get("tower"), n.get("subcommunity")] if x]
     if names and dld_db is not None:
-        proj, score = projects.match(names)
+        areas = next((s.get("dld_areas") for s in cfg["searches"] if s["name"] == n.get("search")), None)
+        proj, score = projects.match(names, areas)
         res["project"], res["match_score"] = proj, score
         if proj and n.get("size_sqm"):
             cs = dld.comps(dld_db, proj, n, months=a["comps_months"], size_tol=a["size_tolerance"])

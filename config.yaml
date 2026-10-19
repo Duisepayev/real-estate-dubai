@@ -18,6 +18,20 @@ searches:
   - {name: Palm Jumeirah, pf_location_id: 86, dld_areas: ["PALM JUMEIRAH"]}
   - {name: JBR, pf_location_id: 67, dld_areas: ["JUMEIRAH BEACH RESIDENCE"]}  # старые башни JBR в DLD без проекта
   - {name: Dubai Hills Estate, pf_location_id: 105, dld_areas: ["Hadaeq Sheikh Mohammed Bin Rashid", "DUBAI HILLS"]}
+  # добавлены 19.10.2026 по просьбе владельца (id PF взяты со страниц поиска PF)
+  - {name: Dubai Islands, pf_location_id: 580, dld_areas: ["Palm Deira"]}  # бывшие Deira Islands
+  - {name: Arabian Ranches, pf_location_id: 34, dld_areas: ["ARABIAN RANCHES I"]}
+  - {name: Arabian Ranches 2, pf_location_id: 8899, dld_areas: ["ARABIAN RANCHES II"]}
+  - {name: Arabian Ranches 3, pf_location_id: 10393, dld_areas: ["ARABIAN RANCHES III"]}
+  - {name: Dubai Creek Harbour, pf_location_id: 48, dld_areas: ["DUBAI CREEK HARBOUR"]}
+  - {name: Palm Jebel Ali, pf_location_id: 85, dld_areas: []}
+  - {name: Mina Rashid (Rashid Yachts & Marina), pf_location_id: 10472, dld_areas: ["MINA RASHID"]}
+  - {name: Tilal Al Ghaf, pf_location_id: 9885, dld_areas: ["TILAL AL GHAF"]}
+  - {name: The Springs, pf_location_id: 89, dld_areas: []}
+  - {name: The Meadows, pf_location_id: 76, dld_areas: []}
+  # Абу-Даби: сделок DLD там нет (другой реестр), поэтому только сравнение с объявлениями
+  - {name: Saadiyat Island, pf_location_id: 310, dld_areas: [], emirate: abu_dhabi}
+  - {name: Yas Island, pf_location_id: 313, dld_areas: [], emirate: abu_dhabi}
 
 # Порог уведомления
 alerts:

@@ -73,6 +73,15 @@ class T(unittest.TestCase):
         self.assertEqual(pr.match(["Maple 2"])[0], "MAPLE 2")
         self.assertIsNone(pr.match(["Murjan 1"])[0])
 
+    def test_generic_word_project_does_not_match(self):
+        db = dld_db([("a", "2026-09-01", "Sell", 0, "DUBAI CREEK HARBOUR", "THE DUBAI CREEK RESIDENCES", None, "Unit", "Flat", "3 B/R", 150, 1),
+                     ("b", "2026-09-01", "Sell", 0, "PALM DEIRA", "Ocean Tower", None, "Unit", "Flat", "3 B/R", 150, 1)])
+        pr = dld.Projects(db)
+        self.assertIsNone(pr.match(["Cedar", "Creek Beach"])[0])
+        self.assertIsNone(pr.match(["Creek Haven Tower A"])[0])
+        self.assertIsNone(pr.match(["Ocean Pearl"])[0])
+        self.assertEqual(pr.match(["Ocean Tower 1"])[0], "Ocean Tower")
+
     def test_building_name_beats_subcommunity(self):
         db = dld_db([("a", "2026-09-01", "Sell", 0, "P", "THE CRESCENT", None, "Unit", "Flat", "2 B/R", 100, 1),
                      ("b", "2026-09-01", "Sell", 0, "P", "ROYAL AMWAJ", None, "Unit", "Flat", "2 B/R", 100, 1)])
@@ -116,6 +125,18 @@ class T(unittest.TestCase):
         self.assertEqual(r["verdict"], "review")
         text = notify.format_listing(n | {"first_seen": "2026-10-19T07:00:00"}, r, analyze.costs(1_900_000, self.cfg), [])
         self.assertIn("района без названия проекта", text)
+
+    def test_abu_dhabi_skips_dld_and_uses_adrec_fee(self):
+        db = dld_db([("x", "2026-09-01", "Sell", 0, "A", "Beach Mansion", None, "Unit", "Flat", "3 B/R", 150, 9_000_000)])
+        n = self.n | {"search": "Saadiyat Island"}
+        r = analyze.evaluate(n, db, dld.Projects(db), None, self.cfg)
+        self.assertIsNone(r["project"])
+        self.assertIsNone(r["comps"])
+        c = analyze.costs(4_000_000, self.cfg, "ready", "abu_dhabi")
+        self.assertEqual(c["reg_pct"], 0.02)
+        text = notify.format_listing(n | {"first_seen": "2026-10-19T07:00:00"}, r | {"verdict": "review"}, c, [])
+        self.assertIn("ADREC 2%", text)
+        self.assertIn("Абу-Даби", text)
 
     def test_costs(self):
         c = analyze.costs(4_000_000, self.cfg)
@@ -180,6 +201,7 @@ class T(unittest.TestCase):
         self.assertFalse(new)
         self.assertEqual(old, 4_000_000)
         self.assertEqual([p for _, p in hist], [4_000_000, 3_800_000])
+        self.assertEqual(s.searches(), {"x"})
 
 
 if __name__ == "__main__":

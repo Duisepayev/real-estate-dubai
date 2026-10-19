@@ -50,7 +50,8 @@ def format_listing(n, r, cost, history, change=None):
         if c["n"] < 3:
             lines.append("   Сделок мало — оценка ненадёжна.")
     else:
-        why = "проект не сопоставлен с реестром DLD" if not r.get("project") else "нет сделок с похожей площадью и спальностью за 12 мес."
+        why = ("сделки Абу-Даби в реестре DLD не публикуются" if (cost or {}).get("emirate") == "abu_dhabi"
+               else "проект не сопоставлен с реестром DLD") if not r.get("project") else "нет сделок с похожей площадью и спальностью за 12 мес."
         lines.append(f"📊 Рыночный диапазон по сделкам не рассчитан: {why}.")
     p = r.get("listing_peers")
     if p:
@@ -75,7 +76,7 @@ def format_listing(n, r, cost, history, change=None):
                      f"Взнос {pct(cost['dp_pct'])}: {m(cost['down'])}, кредит {m(cost['loan'])}, платёж "
                      + ", ".join(f"{m(p)}/мес при {r_ * 100:.1f}%" for r_, p in cost["payments"]) + ".")
     lines.append(f"💵 Собственные средства (предв.): ~{m(cost['own_funds'])} AED = взнос + сборы {m(cost['fees'])} "
-                 f"(DLD 4% {m(cost['dld_fee'])}, агент 2%+VAT {m(cost['agency'])}, банк, оценка, траст, регистрация ипотеки). "
+                 f"({'ADREC' if cost.get('emirate') == 'abu_dhabi' else 'DLD'} {cost.get('reg_pct', 0.04):.0%} {m(cost['dld_fee'])}, агент 2%+VAT {m(cost['agency'])}, банк, оценка, траст, регистрация ипотеки). "
                  f"Покупка за наличные: ~{m(cost['cash_total'])}.")
 
     unknowns = list(r["risks"])

@@ -45,6 +45,10 @@ class Store:
         q = "SELECT id FROM listing" + (" WHERE source=?" if source else "")
         return {r[0] for r in self.db.execute(q, (source,) if source else ())}
 
+    def searches(self):
+        """Поиски (зоны), по которым уже сохранены объявления."""
+        return {r[0] for r in self.db.execute("SELECT DISTINCT json_extract(data, '$.search') FROM listing") if r[0]}
+
     def upsert(self, n):
         """Сохраняет объявление. Возвращает (is_new, old_price, history)."""
         ts = now()
