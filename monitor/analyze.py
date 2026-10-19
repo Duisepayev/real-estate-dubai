@@ -56,6 +56,22 @@ def find_handover(text):
     return best
 
 
+def handover_from_fields(fields):
+    """Срок сдачи из полей PF: ISO-дата ('2027-06-30'), 'Q2 2027', 'June 2027', '2027'."""
+    import calendar
+    best = None
+    for _, v in fields or []:
+        m = re.match(r"\s*(20\d{2})-(\d{1,2})", v)
+        if m:
+            y, mo = int(m.group(1)), int(m.group(2))
+            d = f"{y}-{mo:02d}-{calendar.monthrange(y, mo)[1]:02d}"
+        else:
+            d = find_handover("handover " + v)
+        if d:
+            best = max(best or d, d)
+    return best
+
+
 def find_keywords(text):
     t = (text or "").lower()
     found = set()
@@ -115,7 +131,8 @@ def evaluate(n, dld_db, projects, store, cfg):
     a = cfg["alerts"]
     text = f"{n.get('title', '')}\n{n.get('description', '')}"
     res = {"keywords": find_keywords(text), "risks": find_risks(text),
-           "handover": find_handover(text) if n.get("completion") == "off_plan" else None, "project": None, "match_score": 0,
+           "handover": (handover_from_fields(n.get("handover_fields")) or find_handover(text))
+                       if n.get("completion") == "off_plan" else None, "project": None, "match_score": 0,
            "comps": None, "comp_mode": None, "basis": "project", "comp_list": [], "listing_peers": None, "discount": None, "fair": None}
     if n.get("price_aed") and n.get("size_sqm"):
         res["ppsqm"] = n["price_aed"] / n["size_sqm"]
@@ -150,6 +167,8 @@ def evaluate(n, dld_db, projects, store, cfg):
     late = cfg["filters"].get("latest_handover")
     if late and res["handover"] and res["handover"] > late:
         res["verdict"] = "skip"  # сдача позже согласованного срока
+    elif late and n.get("completion") == "off_plan" and not res["handover"] and res["verdict"] == "target":
+        res["verdict"] = "review"  # срок сдачи неизвестен — может оказаться позже согласованного
     return res
 
 

@@ -77,6 +77,23 @@ class T(unittest.TestCase):
         self.assertEqual(r2["comp_mode"], "size_adjusted")
         self.assertLess(r2["comps"]["median"], 24_779)
 
+    def test_split_long_message_by_lines(self):
+        text = "\n".join(f"• <a href=\"x\">line {i}</a>" + "y" * 150 for i in range(60))
+        parts = notify.split_message(text)
+        self.assertGreater(len(parts), 1)
+        self.assertTrue(all(len(p) <= 4000 for p in parts))
+        self.assertEqual("\n".join(parts), text)
+
+    def test_offplan_primary_and_pf_handover_field(self):
+        raw = {"property": dict(RAW["property"], completion_status="off_plan_primary",
+                                project={"delivery_date": "2028-03-31"})}
+        n = pf.normalize(raw)
+        self.assertEqual(n["completion"], "off_plan")
+        self.assertEqual(analyze.handover_from_fields(n["handover_fields"]), "2028-03-31")
+        r = analyze.evaluate(n, None, None, None, self.cfg)
+        self.assertEqual(r["handover"], "2028-03-31")
+        self.assertEqual(r["verdict"], "skip")
+
     def test_tower_number_mismatch(self):
         db = dld_db([("x", "2026-09-01", "Sell", 0, "MARSA DUBAI", "Beach Mansion Tower 2", None, "Unit", "Flat", "3 B/R", 150, 1)])
         proj, score = dld.Projects(db).match(["Beach Mansion Tower 1"])

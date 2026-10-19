@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: "run — проверка объявлений, test-notify — тестовое уведомление"
+        description: "run — проверка объявлений, summary — одна сводка всех текущих кандидатов, test-notify — тестовое уведомление"
         type: choice
-        options: [run, test-notify]
+        options: [run, summary, test-notify]
         default: run
       dry_run:
         description: "Не отправлять уведомления, только показать в логе"

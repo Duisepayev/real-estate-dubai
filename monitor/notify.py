@@ -148,9 +148,21 @@ def send_telegram(text):
     token, chat = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID") or _chat["id"]
     if not (token and chat):
         return False
-    request(f"https://api.telegram.org/bot{token}/sendMessage", data={
-        "chat_id": chat, "text": text[:4000], "parse_mode": "HTML", "disable_web_page_preview": True})
+    for part in split_message(text):
+        request(f"https://api.telegram.org/bot{token}/sendMessage", data={
+            "chat_id": chat, "text": part, "parse_mode": "HTML", "disable_web_page_preview": True})
     return True
+
+
+def split_message(text, limit=4000):
+    """Делит длинное сообщение по строкам (лимит Telegram 4096), не разрывая HTML-теги внутри строки."""
+    parts, cur = [], ""
+    for line in text.split("\n"):
+        if cur and len(cur) + 1 + len(line) > limit:
+            parts.append(cur)
+            cur = ""
+        cur = f"{cur}\n{line}" if cur else line[:limit]
+    return parts + [cur] if cur else parts
 
 
 def send_email(subject, html_text):

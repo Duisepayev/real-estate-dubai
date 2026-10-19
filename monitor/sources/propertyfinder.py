@@ -58,6 +58,22 @@ def _bedrooms(p):
         return None
 
 
+def _handover_fields(obj, path=""):
+    """Поля со сроком сдачи в данных PF (delivery_date, handover, completion_date…), как пары (ключ, значение)."""
+    out = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            key = f"{path}.{k}" if path else k
+            if isinstance(v, (dict, list)):
+                out += _handover_fields(v, key)
+            elif v and isinstance(v, (str, int)) and re.search(r"deliver|handover|completion_date|completion_year", k, re.I):
+                out.append((key, str(v)))
+    elif isinstance(obj, list):
+        for x in obj[:20]:
+            out += _handover_fields(x, path)
+    return out
+
+
 def normalize(item):
     """Приводит объявление PF к общей схеме."""
     p = item.get("property") or {}
@@ -91,7 +107,10 @@ def normalize(item):
         "bedrooms": _bedrooms(p),
         "bathrooms": p.get("bathrooms_value", p.get("bathrooms")),
         "property_type": ptype,
-        "completion": "off_plan" if p.get("completion_status") == "off_plan" else "ready",
+        # PF пишет off_plan, off_plan_primary («Offplan: First Sale»), off_plan_secondary и т.п.
+        "completion": "off_plan" if str(p.get("completion_status") or "").startswith("off_plan") else "ready",
+        "completion_raw": p.get("completion_status"),
+        "handover_fields": _handover_fields(p),
         "furnished": p.get("furnished"),
         "location_full": loc.get("full_name") or ", ".join(reversed(names)),
         "community": community,

@@ -81,16 +81,17 @@ def run(cfg, args):
         candidates += 1
         key = f"pf:{n['fingerprint']}"
         ok, change = should_notify(store, key, n, r["verdict"], cfg)
-        if not ok:
+        if not ok and not args.summary_all:
             continue
         if len(history) > 1 and not change:
             change = "Цена снижена" if history[-1][1] < history[0][1] else "Цена изменилась"
         emirate = next((s_.get("emirate", "dubai") for s_ in cfg["searches"] if s_["name"] == n.get("search")), "dubai")
         cost = analyze.costs(n["price_aed"], cfg, n["completion"], emirate)
         text = notify.format_listing(n, r, cost, history, change)
-        if (first_run or n["search"] not in known) and not args.dry_run and not args.notify_initial:
+        if args.summary_all or ((first_run or n["search"] not in known) and not args.dry_run and not args.notify_initial):
             # первый запуск: запоминаем базу и шлём одну сводку вместо десятков сообщений
-            store.record_notification(key, n["id"], n["price_aed"], r["verdict"])
+            if not args.dry_run:
+                store.record_notification(key, n["id"], n["price_aed"], r["verdict"])
             digest.append((r["discount"] or 0, n, r))
             continue
         try:
@@ -110,16 +111,16 @@ def run(cfg, args):
             uniq.setdefault(item[1]["fingerprint"], item)
         digest = list(uniq.values())
         zones = sorted({n["search"] for n in collected if n["search"] not in known})
-        head = "Мониторинг: стартовая база" if first_run else "Новые районы: стартовая база (" + ", ".join(zones) + ")"
-        base = len(collected) if first_run else sum(1 for n in collected if n["search"] not in known)
-        lines = [f"<b>{head}</b>\nСохранено {base} объявлений, кандидатов {len(digest)}. "
-                 "Дальше будут приходить только новые объекты и изменения цен. Топ по дисконту к сделкам DLD:"]
-        for d, n, r in digest[:8]:
+        head = "Текущие кандидаты" if args.summary_all else "Мониторинг: стартовая база" if first_run else "Новые районы: стартовая база (" + ", ".join(zones) + ")"
+        base = len(collected) if first_run or args.summary_all else sum(1 for n in collected if n["search"] not in known)
+        lines = [f"<b>{head}</b>\n{'Проверено' if args.summary_all else 'Сохранено'} {base} объявлений, кандидатов {len(digest)}. "
+                 "Дальше будут приходить только новые объекты и изменения цен. Все кандидаты по дисконту к сделкам DLD:"]
+        for d, n, r in digest:
             lines.append(f"• {notify.VERDICT[r['verdict']].split(' ', 1)[0]} <a href=\"{n['url']}\">{n.get('tower') or n.get('subcommunity')}</a>, "
                          f"{n['bedrooms']} сп., {n['size_sqm']} м², {notify.m(n['price_aed'])} AED, дисконт {notify.pct(r['discount'])} "
                          f"({r['comps']['n'] if r['comps'] else 0} сделок)")
         try:
-            notify.deliver("[Dubai deals] Стартовая сводка", "\n".join(lines), log=log)
+            notify.deliver("[Dubai deals] Сводка", "\n".join(lines), dry_run=args.dry_run, log=log)
         except Exception as e:  # noqa: BLE001
             log(f"[notify] ошибка: {e}")
     if args.verbose:
@@ -133,6 +134,10 @@ def run(cfg, args):
             log("   " + " | ".join(map(str, row)))
         log("[dld] названия районов (район | сделок | без проекта): " + "; ".join(
             " | ".join(map(str, r)) for r in dld.area_names(ddb, ["MARSA", "JUMEIRA", "HARBOUR", "ISLAND", "DEIRA", "RANCH", "CREEK", "JEBEL", "RASHID", "GHAF", "SPRING", "MEADOW", "HEBIAH", "SAFA", "THANYAH", "MARSA"])))
+        log("[pf] completion_status: " + json.dumps(Counter(str(n.get("completion_raw")) for n in collected)))
+        hf = Counter(k for n in collected for k, _ in n.get("handover_fields") or [])
+        log("[pf] поля срока сдачи: " + json.dumps(hf) + "; примеры: " + "; ".join(
+            f"{n['id']} {v}" for n in collected[:400] for k, v in (n.get("handover_fields") or [])[:1])[:1500])
         log("[match] не сопоставлены: " + "; ".join(f"{srch} | {place} ({k})" for (srch, place), k in unmatched.most_common()))
     if full:
         gone = store.mark_inactive("propertyfinder", {n["id"] for n in collected}, [s["name"] for s in cfg["searches"]])
@@ -188,7 +193,7 @@ def test_notify(cfg, args):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="monitor")
-    ap.add_argument("command", choices=["run", "sync-dld", "test-notify"])
+    ap.add_argument("command", choices=["run", "summary", "sync-dld", "test-notify"])
     ap.add_argument("--dry-run", action="store_true", help="не отправлять, печатать уведомления")
     ap.add_argument("--full", action="store_true", help="принудительно полный обход")
     ap.add_argument("--skip-dld", action="store_true")
@@ -197,7 +202,10 @@ def main(argv=None):
     ap.add_argument("--show", type=int, default=10**6, help="dry-run: сколько уведомлений печатать целиком")
     args = ap.parse_args(argv)
     cfg = load_config()
-    if args.command == "run":
+    args.summary_all = args.command == "summary"
+    if args.command in ("run", "summary"):
+        if args.summary_all:
+            args.full = True
         return run(cfg, args)
     if args.command == "sync-dld":
         dld.sync(dld.connect(data_dir() / "dld.db"), months=cfg["alerts"]["comps_months"], log=log)
