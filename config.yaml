@@ -16,7 +16,7 @@ filters:
 searches:
   - {name: Emaar Beachfront, pf_location_id: 9755, dld_areas: ["MARSA DUBAI", "Dubai Harbour"]}
   - {name: Palm Jumeirah, pf_location_id: 86, dld_areas: ["PALM JUMEIRAH"]}
-  - {name: JBR, pf_location_id: 67, dld_areas: ["MARSA DUBAI"]}
+  - {name: JBR, pf_location_id: 67, dld_areas: ["JUMEIRAH BEACH RESIDENCE"]}  # старые башни JBR в DLD без проекта
   - {name: Dubai Hills Estate, pf_location_id: 105, dld_areas: ["Hadaeq Sheikh Mohammed Bin Rashid", "DUBAI HILLS"]}
 
 # Порог уведомления
