@@ -100,7 +100,7 @@ def evaluate(n, dld_db, projects, store, cfg):
     text = f"{n.get('title', '')}\n{n.get('description', '')}"
     res = {"keywords": find_keywords(text), "risks": find_risks(text),
            "handover": find_handover(text) if n.get("completion") == "off_plan" else None, "project": None, "match_score": 0,
-           "comps": None, "comp_list": [], "listing_peers": None, "discount": None, "fair": None}
+           "comps": None, "basis": "project", "comp_list": [], "listing_peers": None, "discount": None, "fair": None}
     if n.get("price_aed") and n.get("size_sqm"):
         res["ppsqm"] = n["price_aed"] / n["size_sqm"]
     names = n.get("match_names") or [x for x in [n.get("tower"), n.get("subcommunity")] if x]
@@ -109,6 +109,14 @@ def evaluate(n, dld_db, projects, store, cfg):
         res["project"], res["match_score"] = proj, score
         if proj and n.get("size_sqm"):
             cs = dld.comps(dld_db, proj, n, months=a["comps_months"], size_tol=a["size_tolerance"])
+            res["comp_list"] = sorted(cs, key=lambda c: c["date"], reverse=True)
+            res["comps"] = dld.summarize(cs)
+    if not res["comps"] and not res["project"] and dld_db is not None and n.get("size_sqm"):
+        # проект не найден: сравниваем со сделками района без проекта (старые дома), а не с объявлениями
+        areas = next((s.get("dld_areas") for s in cfg["searches"] if s["name"] == n.get("search")), None)
+        cs = dld.comps(dld_db, None, n, months=a["comps_months"], size_tol=a["size_tolerance"], areas=areas)
+        if cs:
+            res["basis"] = "area"
             res["comp_list"] = sorted(cs, key=lambda c: c["date"], reverse=True)
             res["comps"] = dld.summarize(cs)
     peers = store.active_peers(n) if store else []
@@ -136,7 +144,8 @@ def verdict(n, r, a):
     if d is not None and d >= a["suspicious_discount"]:
         return "suspect"
     spread = (c["p75"] - c["p25"]) / c["median"] if c else None
-    if enough and d >= a["target_discount"] and spread <= a.get("max_spread", 0.35):
+    # сделки района без проекта — не тот же дом, поэтому максимум «на проверку»
+    if enough and d >= a["target_discount"] and spread <= a.get("max_spread", 0.35) and r.get("basis") != "area":
         return "target"
     signals = bool(r["keywords"]) or n.get("pf_flags", {}).get("is_price_drop") or n.get("pf_flags", {}).get("is_great_value")
     if d is not None and d >= a["target_discount"] and c["n"] >= 2:

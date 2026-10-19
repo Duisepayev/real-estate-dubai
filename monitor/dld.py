@@ -132,33 +132,51 @@ class Projects:
         return (best, best_key[1]) if best else (None, 0.0)
 
 
+def area_names(db, like):
+    """Диагностика: точные названия районов DLD, похожие на `like`, с числом сделок."""
+    q = ("SELECT area, COUNT(*), SUM(project IS NULL) FROM tx WHERE " + " OR ".join(["UPPER(area) LIKE ?"] * len(like))
+         + " GROUP BY area ORDER BY 2 DESC")
+    return db.execute(q, ["%" + x.upper() + "%" for x in like]).fetchall()
+
+
 def area_profile(db, areas):
     """Диагностика: какие проекты/мастер-проекты DLD встречаются в районах."""
     q = ("SELECT area, COALESCE(master_project,'-'), COALESCE(project,'(нет проекта)'), COUNT(*) FROM tx "
-         "WHERE area IN (%s) GROUP BY 1,2,3 ORDER BY 4 DESC LIMIT 60" % ",".join("?" * len(areas)))
-    return db.execute(q, areas).fetchall()
+         "WHERE UPPER(area) IN (%s) GROUP BY 1,2,3 ORDER BY 4 DESC LIMIT 60" % ",".join("?" * len(areas)))
+    return db.execute(q, [a.upper() for a in areas]).fetchall()
 
 
-def comps(db, project, listing, months=12, size_tol=0.25):
-    """Сопоставимые сделки: тот же проект, число комнат, тип, площадь ±size_tol."""
+def comps(db, project, listing, months=12, size_tol=0.25, areas=None):
+    """Сопоставимые сделки: тот же проект, число комнат, тип, площадь ±size_tol.
+    Если project=None, берутся сделки района `areas` без проекта: так DLD
+    записывает старые дома (например, башни JBR Sadaf, Murjan, Rimal)."""
     since = (dt.date.today() - dt.timedelta(days=int(months * 30.5))).isoformat()
     size = listing.get("size_sqm")
-    q = ("SELECT number, date, procedure, offplan, size_sqm, value_aed, rooms FROM tx "
-         "WHERE project=? AND date>=? AND size_sqm>0 AND value_aed>0 AND sub_type IN (%s)"
-         % ",".join("?" * len(_sub_types(listing["property_type"]))))
-    args = [project, since, *_sub_types(listing["property_type"])]
-    rl = rooms_label(listing.get("bedrooms"))
-    if rl:
-        q += " AND rooms=?"
-        args.append(rl)
-    if size:
-        q += " AND size_sqm BETWEEN ? AND ?"
-        args += [size * (1 - size_tol), size * (1 + size_tol)]
-    rows = db.execute(q, args).fetchall()
+    if project:
+        where, base = "project=?", [project]
+    elif areas:
+        where, base = "project IS NULL AND UPPER(area) IN (%s)" % ",".join("?" * len(areas)), [x.upper() for x in areas]
+    else:
+        return []
+
+    def fetch(sub_types):
+        q = ("SELECT number, date, procedure, offplan, size_sqm, value_aed, rooms FROM tx "
+             "WHERE %s AND date>=? AND size_sqm>0 AND value_aed>0 AND sub_type IN (%s)"
+             % (where, ",".join("?" * len(sub_types))))
+        args = [*base, since, *sub_types]
+        rl = rooms_label(listing.get("bedrooms"))
+        if rl:
+            q += " AND rooms=?"
+            args.append(rl)
+        if size:
+            q += " AND size_sqm BETWEEN ? AND ?"
+            args += [size * (1 - size_tol), size * (1 + size_tol)]
+        return db.execute(q, args).fetchall()
+
+    rows = fetch(_sub_types(listing["property_type"]))
     # квартиру сравниваем с квартирами, а не с гостиничными апартаментами, если их хватает
     if listing["property_type"] not in ("villa", "townhouse"):
-        flats = db.execute(q.replace("sub_type IN (?,?)", "sub_type IN (?)"),
-                           [project, since, "Flat", *args[4:]]).fetchall()
+        flats = fetch(("Flat",))
         if len(flats) >= 3 or len(flats) == len(rows):
             rows = flats
     # готовый объект сравниваем с готовыми, off-plan — со всеми
