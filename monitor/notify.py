@@ -42,9 +42,14 @@ def format_listing(n, r, cost, history, change=None):
         lines.append(f"📊 Обоснованный диапазон: {m(lo)} – {m(hi)} AED (медиана {m(mid)})")
         lines.append(f"   Дисконт к медиане: <b>{pct(r['discount'])}</b>. Основа: {c['n']} сделок DLD "
                      + (f"в «{e(r['project'])}»" if r.get("basis") != "area" else "района без названия проекта (старые дома; проект объявления в реестре не найден, сравнение грубое)")
-                     + f", {c['first']} … {c['last']}, та же спальность, площадь ±25%; "
-                     f"медиана {m(c['median'])} AED/м² (25–75%: {m(c['p25'])}–{m(c['p75'])}).")
-        for x in r["comp_list"][:3]:
+                     + f", {c['first']} … {c['last']}, та же спальность, "
+                     + ("квартиры той же площади (±5%); " if r.get("comp_mode") == "same_size"
+                        else "площадь ±25%, цена за м² поправлена на разницу площадей; ")
+                     + f"медиана {m(c['median'])} AED/м² (25–75%: {m(c['p25'])}–{m(c['p75'])}).")
+        shown = r["comp_list"]
+        if r.get("comp_mode") == "same_size":  # сначала сделки той же площади
+            shown = sorted(shown, key=lambda x: abs(x["size_sqm"] - (n.get("size_sqm") or 0)))
+        for x in shown[:3]:
             lines.append(f"   • {x['date']}: {m(x['value_aed'])} AED, {x['size_sqm']:.0f} м², {m(x['ppsqm'])} AED/м²"
                          + (" (off-plan)" if x["offplan"] else ""))
         if c["n"] < 3:
@@ -143,9 +148,21 @@ def send_telegram(text):
     token, chat = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID") or _chat["id"]
     if not (token and chat):
         return False
-    request(f"https://api.telegram.org/bot{token}/sendMessage", data={
-        "chat_id": chat, "text": text[:4000], "parse_mode": "HTML", "disable_web_page_preview": True})
+    for part in split_message(text):
+        request(f"https://api.telegram.org/bot{token}/sendMessage", data={
+            "chat_id": chat, "text": part, "parse_mode": "HTML", "disable_web_page_preview": True})
     return True
+
+
+def split_message(text, limit=4000):
+    """Делит длинное сообщение по строкам (лимит Telegram 4096), не разрывая HTML-теги внутри строки."""
+    parts, cur = [], ""
+    for line in text.split("\n"):
+        if cur and len(cur) + 1 + len(line) > limit:
+            parts.append(cur)
+            cur = ""
+        cur = f"{cur}\n{line}" if cur else line[:limit]
+    return parts + [cur] if cur else parts
 
 
 def send_email(subject, html_text):

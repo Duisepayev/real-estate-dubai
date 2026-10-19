@@ -46,6 +46,20 @@ def fetch_page(url):
     return sr.get("listings") or [], sr.get("meta") or {}, d["props"]["pageProps"].get("filtersValueFromQuery")
 
 
+_DELIVERY_TEXT = re.compile(r"(?:Delivery\s+Date|Handover|Completion\s+Date)\W{0,40}?((?:Q[1-4]|[A-Z][a-z]{2,8})?\s*20\d{2}(?:-\d{2}(?:-\d{2})?)?)")
+
+
+def detail_handover(url):
+    """Срок сдачи со страницы объявления (в выдаче поиска его нет): поля delivery/handover
+    в __NEXT_DATA__, иначе текст «Delivery Date: Q2 2027» из блока проекта."""
+    html = request(url)
+    m = _NEXT.search(html)
+    fields = _handover_fields(json.loads(m.group(1))) if m else []
+    if not fields:
+        fields = [("text", t.group(1)) for t in _DELIVERY_TEXT.finditer(re.sub(r"<[^>]+>", " ", html))][:3]
+    return fields
+
+
 def _bedrooms(p):
     v = p.get("bedrooms_value", p.get("bedrooms"))
     if v in (None, ""):
@@ -56,6 +70,22 @@ def _bedrooms(p):
         return int(str(v).replace("+", ""))
     except ValueError:
         return None
+
+
+def _handover_fields(obj, path=""):
+    """Поля со сроком сдачи в данных PF (delivery_date, handover, completion_date…), как пары (ключ, значение)."""
+    out = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            key = f"{path}.{k}" if path else k
+            if isinstance(v, (dict, list)):
+                out += _handover_fields(v, key)
+            elif v and isinstance(v, (str, int)) and re.search(r"deliver|handover|completion_date|completion_year", k, re.I):
+                out.append((key, str(v)))
+    elif isinstance(obj, list):
+        for x in obj[:20]:
+            out += _handover_fields(x, path)
+    return out
 
 
 def normalize(item):
@@ -91,7 +121,10 @@ def normalize(item):
         "bedrooms": _bedrooms(p),
         "bathrooms": p.get("bathrooms_value", p.get("bathrooms")),
         "property_type": ptype,
-        "completion": "off_plan" if p.get("completion_status") == "off_plan" else "ready",
+        # PF пишет off_plan, off_plan_primary («Offplan: First Sale»), off_plan_secondary и т.п.
+        "completion": "off_plan" if str(p.get("completion_status") or "").startswith("off_plan") else "ready",
+        "completion_raw": p.get("completion_status"),
+        "handover_fields": _handover_fields(p),
         "furnished": p.get("furnished"),
         "location_full": loc.get("full_name") or ", ".join(reversed(names)),
         "community": community,
