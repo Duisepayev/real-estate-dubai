@@ -68,6 +68,22 @@ def run(cfg, args):
     for n in collected:
         history = store.history(n["id"])
         r = analyze.evaluate(n, ddb, projects, store, cfg)
+        if r["verdict"] != "skip" and n["completion"] == "off_plan" and not r["handover"] and not n.get("handover_fields"):
+            # в выдаче нет срока сдачи — берём его со страницы объявления (кэш в state, только для кандидатов)
+            cached = store.get_kv(f"handover:{n['id']}")
+            if cached is None:
+                try:
+                    cached = json.dumps(pf.detail_handover(n["url"]))
+                    time.sleep(sch["request_delay_sec"])
+                except Exception as e:  # noqa: BLE001
+                    log(f"[pf] срок сдачи {n['id']}: {e}")
+                    cached = "[]"
+                store.set_kv(f"handover:{n['id']}", cached)
+            n["handover_fields"] = json.loads(cached)
+            if args.verbose:
+                log(f"[pf] срок сдачи {n['id']}: {n['handover_fields'][:3]}")
+            if n["handover_fields"]:
+                r = analyze.evaluate(n, ddb, projects, store, cfg)
         stats[r["verdict"]] += 1
         place = n.get("tower") or n.get("subcommunity")
         (matches.__setitem__((n["search"], place, r["project"]), matches[(n["search"], place, r["project"])] + 1)

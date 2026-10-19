@@ -46,6 +46,20 @@ def fetch_page(url):
     return sr.get("listings") or [], sr.get("meta") or {}, d["props"]["pageProps"].get("filtersValueFromQuery")
 
 
+_DELIVERY_TEXT = re.compile(r"(?:Delivery\s+Date|Handover|Completion\s+Date)\W{0,40}?((?:Q[1-4]|[A-Z][a-z]{2,8})?\s*20\d{2}(?:-\d{2}(?:-\d{2})?)?)")
+
+
+def detail_handover(url):
+    """Срок сдачи со страницы объявления (в выдаче поиска его нет): поля delivery/handover
+    в __NEXT_DATA__, иначе текст «Delivery Date: Q2 2027» из блока проекта."""
+    html = request(url)
+    m = _NEXT.search(html)
+    fields = _handover_fields(json.loads(m.group(1))) if m else []
+    if not fields:
+        fields = [("text", t.group(1)) for t in _DELIVERY_TEXT.finditer(re.sub(r"<[^>]+>", " ", html))][:3]
+    return fields
+
+
 def _bedrooms(p):
     v = p.get("bedrooms_value", p.get("bedrooms"))
     if v in (None, ""):
