@@ -126,6 +126,8 @@ def run(cfg, args):
         log("[dld] профиль районов (район | мастер-проект | проект | сделок):")
         for row in dld.area_profile(ddb, areas):
             log("   " + " | ".join(map(str, row)))
+        log("[dld] названия районов (район | сделок | без проекта): " + "; ".join(
+            " | ".join(map(str, r)) for r in dld.area_names(ddb, ["MARSA", "JUMEIRA", "HARBOUR", "ISLAND", "DEIRA"])))
         log("[match] не сопоставлены: " + "; ".join(f"{srch} | {place} ({k})" for (srch, place), k in unmatched.most_common()))
     if full:
         gone = store.mark_inactive("propertyfinder", {n["id"] for n in collected}, [s["name"] for s in cfg["searches"]])
