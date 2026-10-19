@@ -201,6 +201,7 @@ class T(unittest.TestCase):
         self.assertFalse(new)
         self.assertEqual(old, 4_000_000)
         self.assertEqual([p for _, p in hist], [4_000_000, 3_800_000])
+        self.assertEqual(s.searches(), {"x"})
 
 
 if __name__ == "__main__":
