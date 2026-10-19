@@ -84,7 +84,8 @@ def run(cfg, args):
             continue
         if len(history) > 1 and not change:
             change = "Цена снижена" if history[-1][1] < history[0][1] else "Цена изменилась"
-        cost = analyze.costs(n["price_aed"], cfg, n["completion"])
+        emirate = next((s_.get("emirate", "dubai") for s_ in cfg["searches"] if s_["name"] == n.get("search")), "dubai")
+        cost = analyze.costs(n["price_aed"], cfg, n["completion"], emirate)
         text = notify.format_listing(n, r, cost, history, change)
         if first_run and not args.dry_run and not args.notify_initial:
             # первый запуск: запоминаем базу и шлём одну сводку вместо десятков сообщений
@@ -127,7 +128,7 @@ def run(cfg, args):
         for row in dld.area_profile(ddb, areas):
             log("   " + " | ".join(map(str, row)))
         log("[dld] названия районов (район | сделок | без проекта): " + "; ".join(
-            " | ".join(map(str, r)) for r in dld.area_names(ddb, ["MARSA", "JUMEIRA", "HARBOUR", "ISLAND", "DEIRA"])))
+            " | ".join(map(str, r)) for r in dld.area_names(ddb, ["MARSA", "JUMEIRA", "HARBOUR", "ISLAND", "DEIRA", "RANCH", "CREEK", "JEBEL", "RASHID", "GHAF", "SPRING", "MEADOW", "HEBIAH", "SAFA", "THANYAH", "MARSA"])))
         log("[match] не сопоставлены: " + "; ".join(f"{srch} | {place} ({k})" for (srch, place), k in unmatched.most_common()))
     if full:
         gone = store.mark_inactive("propertyfinder", {n["id"] for n in collected}, [s["name"] for s in cfg["searches"]])

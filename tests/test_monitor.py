@@ -117,6 +117,18 @@ class T(unittest.TestCase):
         text = notify.format_listing(n | {"first_seen": "2026-10-19T07:00:00"}, r, analyze.costs(1_900_000, self.cfg), [])
         self.assertIn("района без названия проекта", text)
 
+    def test_abu_dhabi_skips_dld_and_uses_adrec_fee(self):
+        db = dld_db([("x", "2026-09-01", "Sell", 0, "A", "Beach Mansion", None, "Unit", "Flat", "3 B/R", 150, 9_000_000)])
+        n = self.n | {"search": "Saadiyat Island"}
+        r = analyze.evaluate(n, db, dld.Projects(db), None, self.cfg)
+        self.assertIsNone(r["project"])
+        self.assertIsNone(r["comps"])
+        c = analyze.costs(4_000_000, self.cfg, "ready", "abu_dhabi")
+        self.assertEqual(c["reg_pct"], 0.02)
+        text = notify.format_listing(n | {"first_seen": "2026-10-19T07:00:00"}, r | {"verdict": "review"}, c, [])
+        self.assertIn("ADREC 2%", text)
+        self.assertIn("Абу-Даби", text)
+
     def test_costs(self):
         c = analyze.costs(4_000_000, self.cfg)
         self.assertEqual(c["down"], 1_400_000)
