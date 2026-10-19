@@ -92,6 +92,31 @@ class T(unittest.TestCase):
         r = analyze.evaluate(n, db, dld.Projects(db), None, self.cfg)
         self.assertEqual(r["verdict"], "skip")
 
+    def test_unmatched_old_tower_uses_area_deals(self):
+        # Sadaf 8 (JBR): в DLD без проекта; объявления рядом завышены относительно сделок
+        import datetime as dt
+        d = (dt.date.today() - dt.timedelta(days=40)).isoformat()
+        vals = [2_231_926, 2_500_000, 2_500_000, 2_575_000, 2_585_000, 2_800_000]
+        db = dld_db([(f"s{i}", d, "Sell", 0, "MARSA DUBAI", None, None, "Unit", "Flat", "3 B/R", 177, v)
+                     for i, v in enumerate(vals)])
+        n = self.n | {"search": "JBR", "tower": "Sadaf 8", "subcommunity": "Sadaf", "match_names": ["Sadaf", "Sadaf 8"],
+                      "price_aed": 2_600_000, "size_sqm": 177.3, "description": "", "title": "Higher 3 BR"}
+
+        class Peers:
+            def active_peers(self, _n):
+                return [19_231] * 5
+        r = analyze.evaluate(n, db, dld.Projects(db), Peers(), self.cfg)
+        self.assertIsNone(r["project"])
+        self.assertEqual(r["basis"], "area")
+        self.assertEqual(r["comps"]["n"], 6)
+        self.assertLess(r["discount"], 0.05)
+        self.assertEqual(r["verdict"], "skip")
+        # та же цена на 25% ниже сделок района — только «на проверку», не «цель»
+        r = analyze.evaluate(n | {"price_aed": 1_900_000}, db, dld.Projects(db), Peers(), self.cfg)
+        self.assertEqual(r["verdict"], "review")
+        text = notify.format_listing(n | {"first_seen": "2026-10-19T07:00:00"}, r, analyze.costs(1_900_000, self.cfg), [])
+        self.assertIn("района без названия проекта", text)
+
     def test_costs(self):
         c = analyze.costs(4_000_000, self.cfg)
         self.assertEqual(c["down"], 1_400_000)
