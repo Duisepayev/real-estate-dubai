@@ -109,7 +109,8 @@ def evaluate(n, dld_db, projects, store, cfg):
         dld_db = None  # сделки Абу-Даби в DLD не попадают; не сравниваем с одноимёнными проектами Дубая
     names = n.get("match_names") or [x for x in [n.get("tower"), n.get("subcommunity")] if x]
     if names and dld_db is not None:
-        proj, score = projects.match(names)
+        areas = next((s.get("dld_areas") for s in cfg["searches"] if s["name"] == n.get("search")), None)
+        proj, score = projects.match(names, areas)
         res["project"], res["match_score"] = proj, score
         if proj and n.get("size_sqm"):
             cs = dld.comps(dld_db, proj, n, months=a["comps_months"], size_tol=a["size_tolerance"])
