@@ -130,6 +130,12 @@ class Projects:
             # проект должен иметь хотя бы одно «настоящее» слово: «1 Residences», «The 8» не годятся
             if not pt or not pt <= nt or not any(len(t) >= 3 and t.isalpha() for t in pt):
                 continue
+            # проект должен покрывать больше половины слов хотя бы одного названия: «Ocean Tower»
+            # не подходит к «Ocean Pearl», «Dubai Creek Residences» — к «Cedar at Creek Beach»
+            # (номера корпусов и буквы «Tower A» не считаем)
+            if not any(tn and len(pt & tn) / len(tn) > 0.5 for tn in
+                       ({t for t in tokens(x) if t.isalpha() and len(t) > 1} for x in names)):
+                continue
             key = (len(pt), len(pt) / len(nt))
             if key > best_key:
                 best, best_key = proj, key

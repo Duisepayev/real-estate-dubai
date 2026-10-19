@@ -73,6 +73,15 @@ class T(unittest.TestCase):
         self.assertEqual(pr.match(["Maple 2"])[0], "MAPLE 2")
         self.assertIsNone(pr.match(["Murjan 1"])[0])
 
+    def test_generic_word_project_does_not_match(self):
+        db = dld_db([("a", "2026-09-01", "Sell", 0, "DUBAI CREEK HARBOUR", "THE DUBAI CREEK RESIDENCES", None, "Unit", "Flat", "3 B/R", 150, 1),
+                     ("b", "2026-09-01", "Sell", 0, "PALM DEIRA", "Ocean Tower", None, "Unit", "Flat", "3 B/R", 150, 1)])
+        pr = dld.Projects(db)
+        self.assertIsNone(pr.match(["Cedar", "Creek Beach"])[0])
+        self.assertIsNone(pr.match(["Creek Haven Tower A"])[0])
+        self.assertIsNone(pr.match(["Ocean Pearl"])[0])
+        self.assertEqual(pr.match(["Ocean Tower 1"])[0], "Ocean Tower")
+
     def test_building_name_beats_subcommunity(self):
         db = dld_db([("a", "2026-09-01", "Sell", 0, "P", "THE CRESCENT", None, "Unit", "Flat", "2 B/R", 100, 1),
                      ("b", "2026-09-01", "Sell", 0, "P", "ROYAL AMWAJ", None, "Unit", "Flat", "2 B/R", 100, 1)])
