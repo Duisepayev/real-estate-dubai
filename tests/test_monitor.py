@@ -97,7 +97,7 @@ class T(unittest.TestCase):
         import datetime as dt
         d = (dt.date.today() - dt.timedelta(days=40)).isoformat()
         vals = [2_231_926, 2_500_000, 2_500_000, 2_575_000, 2_585_000, 2_800_000]
-        db = dld_db([(f"s{i}", d, "Sell", 0, "MARSA DUBAI", None, None, "Unit", "Flat", "3 B/R", 177, v)
+        db = dld_db([(f"s{i}", d, "Sell", 0, "JUMEIRAH BEACH RESIDENCE", None, None, "Unit", "Flat", "3 B/R", 177, v)
                      for i, v in enumerate(vals)])
         n = self.n | {"search": "JBR", "tower": "Sadaf 8", "subcommunity": "Sadaf", "match_names": ["Sadaf", "Sadaf 8"],
                       "price_aed": 2_600_000, "size_sqm": 177.3, "description": "", "title": "Higher 3 BR"}
