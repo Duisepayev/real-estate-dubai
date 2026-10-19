@@ -42,9 +42,14 @@ def format_listing(n, r, cost, history, change=None):
         lines.append(f"📊 Обоснованный диапазон: {m(lo)} – {m(hi)} AED (медиана {m(mid)})")
         lines.append(f"   Дисконт к медиане: <b>{pct(r['discount'])}</b>. Основа: {c['n']} сделок DLD "
                      + (f"в «{e(r['project'])}»" if r.get("basis") != "area" else "района без названия проекта (старые дома; проект объявления в реестре не найден, сравнение грубое)")
-                     + f", {c['first']} … {c['last']}, та же спальность, площадь ±25%; "
-                     f"медиана {m(c['median'])} AED/м² (25–75%: {m(c['p25'])}–{m(c['p75'])}).")
-        for x in r["comp_list"][:3]:
+                     + f", {c['first']} … {c['last']}, та же спальность, "
+                     + ("квартиры той же площади (±5%); " if r.get("comp_mode") == "same_size"
+                        else "площадь ±25%, цена за м² поправлена на разницу площадей; ")
+                     + f"медиана {m(c['median'])} AED/м² (25–75%: {m(c['p25'])}–{m(c['p75'])}).")
+        shown = r["comp_list"]
+        if r.get("comp_mode") == "same_size":  # сначала сделки той же площади
+            shown = sorted(shown, key=lambda x: abs(x["size_sqm"] - (n.get("size_sqm") or 0)))
+        for x in shown[:3]:
             lines.append(f"   • {x['date']}: {m(x['value_aed'])} AED, {x['size_sqm']:.0f} м², {m(x['ppsqm'])} AED/м²"
                          + (" (off-plan)" if x["offplan"] else ""))
         if c["n"] < 3:

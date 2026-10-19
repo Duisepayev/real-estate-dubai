@@ -97,12 +97,26 @@ def costs(price, cfg, completion="ready", emirate="dubai"):
             "cash_total": price + dld_fee + agency + f["trustee_fee_aed"]}
 
 
+def value_comps(cs, size, a):
+    """Сводка по сделкам для оценки. Если продавались квартиры почти той же площади,
+    сравниваем только с ними: у больших квартир цена за м² ниже, и сравнение по м²
+    с меньшими давало ложный дисконт (Avida 189 м² против сделок 145–158 м²).
+    Иначе цену за м² каждой сделки поправляем на разницу площадей."""
+    tol = a.get("same_size_tolerance", 0.05)
+    near = [c for c in cs if abs(c["size_sqm"] - size) <= size * tol]
+    if near:
+        return dld.summarize(near), "same_size"
+    k = a.get("size_elasticity", 0.2)
+    adj = [dict(c, ppsqm=c["ppsqm"] * (c["size_sqm"] / size) ** k) for c in cs]
+    return dld.summarize(adj), "size_adjusted"
+
+
 def evaluate(n, dld_db, projects, store, cfg):
     a = cfg["alerts"]
     text = f"{n.get('title', '')}\n{n.get('description', '')}"
     res = {"keywords": find_keywords(text), "risks": find_risks(text),
            "handover": find_handover(text) if n.get("completion") == "off_plan" else None, "project": None, "match_score": 0,
-           "comps": None, "basis": "project", "comp_list": [], "listing_peers": None, "discount": None, "fair": None}
+           "comps": None, "comp_mode": None, "basis": "project", "comp_list": [], "listing_peers": None, "discount": None, "fair": None}
     if n.get("price_aed") and n.get("size_sqm"):
         res["ppsqm"] = n["price_aed"] / n["size_sqm"]
     if any(s.get("emirate") == "abu_dhabi" for s in cfg["searches"] if s["name"] == n.get("search")):
@@ -115,7 +129,7 @@ def evaluate(n, dld_db, projects, store, cfg):
         if proj and n.get("size_sqm"):
             cs = dld.comps(dld_db, proj, n, months=a["comps_months"], size_tol=a["size_tolerance"])
             res["comp_list"] = sorted(cs, key=lambda c: c["date"], reverse=True)
-            res["comps"] = dld.summarize(cs)
+            res["comps"], res["comp_mode"] = value_comps(cs, n["size_sqm"], a) if cs else (None, None)
     if not res["comps"] and not res["project"] and dld_db is not None and n.get("size_sqm"):
         # проект не найден: сравниваем со сделками района без проекта (старые дома), а не с объявлениями
         areas = next((s.get("dld_areas") for s in cfg["searches"] if s["name"] == n.get("search")), None)
@@ -123,7 +137,7 @@ def evaluate(n, dld_db, projects, store, cfg):
         if cs:
             res["basis"] = "area"
             res["comp_list"] = sorted(cs, key=lambda c: c["date"], reverse=True)
-            res["comps"] = dld.summarize(cs)
+            res["comps"], res["comp_mode"] = value_comps(cs, n["size_sqm"], a) if cs else (None, None)
     peers = store.active_peers(n) if store else []
     if peers:
         res["listing_peers"] = {"n": len(peers), "median": statistics.median(peers), "min": min(peers)}

@@ -55,6 +55,28 @@ class T(unittest.TestCase):
         self.assertIn("Дисконт к медиане", text)
         self.assertIn("4 200 000 → 4 000 000", text)
 
+    def test_same_size_deal_beats_price_per_sqm(self):
+        # Avida: 189 м² за 3,55 млн; такая же квартира продана за 3,42 млн, меньшие — по 24–25 тыс./м²
+        import datetime as dt
+        d = (dt.date.today() - dt.timedelta(days=30)).isoformat()
+        rows = [("a", d, "Sell", 1, "Palm Deira", "Avida Residences", None, "Unit", "Flat", "3 B/R", 189, 3_418_131),
+                ("b", d, "Sell", 1, "Palm Deira", "Avida Residences", None, "Unit", "Flat", "3 B/R", 148, 3_552_360),
+                ("c", d, "Sell", 1, "Palm Deira", "Avida Residences", None, "Unit", "Flat", "3 B/R", 145, 3_599_040),
+                ("d", d, "Sell", 1, "Palm Deira", "Avida Residences", None, "Unit", "Flat", "3 B/R", 155, 3_894_916),
+                ("e", d, "Sell", 1, "Palm Deira", "Avida Residences", None, "Unit", "Flat", "3 B/R", 158, 3_972_364)]
+        db = dld_db(rows)
+        n = dict(self.n, tower="Avida Residences", subcommunity=None, match_names=None, size_sqm=189,
+                 price_aed=3_550_000, completion="off_plan", title="Avida", description="")
+        r = analyze.evaluate(n, db, dld.Projects(db), None, self.cfg)
+        self.assertEqual(r["comp_mode"], "same_size")
+        self.assertLess(r["discount"], 0)
+        self.assertEqual(r["verdict"], "skip")
+        # без сделки той же площади цена за м² меньших квартир поправляется вниз
+        db2 = dld_db(rows[1:])
+        r2 = analyze.evaluate(n, db2, dld.Projects(db2), None, self.cfg)
+        self.assertEqual(r2["comp_mode"], "size_adjusted")
+        self.assertLess(r2["comps"]["median"], 24_779)
+
     def test_tower_number_mismatch(self):
         db = dld_db([("x", "2026-09-01", "Sell", 0, "MARSA DUBAI", "Beach Mansion Tower 2", None, "Unit", "Flat", "3 B/R", 150, 1)])
         proj, score = dld.Projects(db).match(["Beach Mansion Tower 1"])
