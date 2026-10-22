@@ -152,18 +152,58 @@ class T(unittest.TestCase):
 
         class Peers:
             def active_peers(self, _n):
-                return [19_231] * 5
+                return [3_400_000] * 5
         r = analyze.evaluate(n, db, dld.Projects(db), Peers(), self.cfg)
         self.assertIsNone(r["project"])
         self.assertEqual(r["basis"], "area")
         self.assertEqual(r["comps"]["n"], 6)
         self.assertLess(r["discount"], 0.05)
         self.assertEqual(r["verdict"], "skip")
-        # та же цена на 25% ниже сделок района — только «на проверку», не «цель»
+        # 25% ниже сделок района без названия проекта: без срочности в тексте не пишем (Murjan 3 — ложный сигнал)
+        r = analyze.evaluate(n | {"price_aed": 1_900_000}, db, dld.Projects(db), Peers(), self.cfg)
+        self.assertEqual(r["verdict"], "skip")
+        # со срочностью — только «на проверку», не «цель»
+        n = n | {"title": "Distress sale | Higher 3 BR"}
         r = analyze.evaluate(n | {"price_aed": 1_900_000}, db, dld.Projects(db), Peers(), self.cfg)
         self.assertEqual(r["verdict"], "review")
         text = notify.format_listing(n | {"first_seen": "2026-10-19T07:00:00"}, r, analyze.costs(1_900_000, self.cfg), [])
         self.assertIn("района без названия проекта", text)
+
+    def test_abu_dhabi_compares_whole_price_not_per_sqm(self):
+        # Yas Park Views: вилла 4BR 348 м² за 4,575 млн — 13 147 AED/м² против медианы соседей ~20 000 AED/м²,
+        # но соседи с меньшей площадью стоят столько же целиком: это не скидка
+        db = dld_db([])
+        n = self.n | {"search": "Yas Island", "tower": None, "subcommunity": "Yas Park Views", "property_type": "villa",
+                      "bedrooms": 4, "size_sqm": 348.0, "price_aed": 4_575_000, "pf_flags": {"is_great_value": True}}
+
+        class Peers:
+            def __init__(self, prices):
+                self.prices = prices
+
+            def active_peers(self, _n):
+                return self.prices
+        r = analyze.evaluate(n, db, dld.Projects(db), Peers([4_700_000, 4_800_000, 4_900_000, 4_600_000]), self.cfg)
+        self.assertAlmostEqual(r["listing_peers"]["discount"], 1 - 4_575_000 / 4_750_000)
+        self.assertEqual(r["verdict"], "skip")
+        r = analyze.evaluate(n, db, dld.Projects(db), Peers([6_000_000, 6_200_000, 5_900_000]), self.cfg)
+        self.assertEqual(r["verdict"], "review")
+        text = notify.format_listing(n | {"first_seen": "2026-10-19T07:00:00"}, r, analyze.costs(4_575_000, self.cfg, "off_plan", "abu_dhabi"), [])
+        self.assertIn("цене целиком", text)
+
+    def test_renotify_only_below_lowest_notified_price(self):
+        from monitor.__main__ import should_notify
+        st = Store(":memory:")
+        n = self.n | {"price_aed": 3_580_000}
+        self.assertTrue(should_notify(st, "k", n, "review", self.cfg)[0])
+        st.record_notification("k", "a", 3_580_000, "review")
+        # другой агент выставил тот же объект дороже, потом снова дешевле — не новость
+        self.assertFalse(should_notify(st, "k", n | {"price_aed": 3_750_000}, "review", self.cfg)[0])
+        st.record_notification("k", "b", 3_750_000, "review")
+        self.assertEqual(st.last_notification("k")[1], 3_580_000)
+        self.assertFalse(should_notify(st, "k", n, "review", self.cfg)[0])
+        ok, why = should_notify(st, "k", n | {"price_aed": 3_400_000}, "review", self.cfg)
+        self.assertTrue(ok)
+        self.assertIn("3 580 000", why)
 
     def test_abu_dhabi_skips_dld_and_uses_adrec_fee(self):
         db = dld_db([("x", "2026-09-01", "Sell", 0, "A", "Beach Mansion", None, "Unit", "Flat", "3 B/R", 150, 9_000_000)])

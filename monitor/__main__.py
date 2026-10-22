@@ -10,7 +10,7 @@ from . import analyze, dld, notify
 from .config import data_dir, load_config, state_dir
 from .sources import propertyfinder as pf
 from .sources import threads
-from .store import Store, now
+from .store import Store, fingerprint, now
 
 
 def log(*a):
@@ -18,13 +18,16 @@ def log(*a):
 
 
 def should_notify(store, key, n, verdict, cfg):
+    """Повторно пишем только если цена опустилась ниже самой низкой, о которой уже писали.
+    Рост цены и возврат к прежней цене — не новость: один объект часто выставляют
+    несколько агентов по разным ценам, и раньше бот каждый раз сообщал «цена изменилась»."""
     last = store.last_notification(key)
     if last is None:
         return True, None
     _, old_price, old_verdict = last
     if old_price and n["price_aed"]:
         ch = (n["price_aed"] - old_price) / old_price
-        if abs(ch) >= cfg["alerts"]["renotify_price_change"]:
+        if -ch >= cfg["alerts"]["renotify_price_change"]:
             return True, f"Цена изменилась с {notify.m(old_price)} до {notify.m(n['price_aed'])} AED ({ch * 100:+.1f}%) с прошлого уведомления"
     rank = {"review": 1, "suspect": 1, "target": 2}
     if rank.get(verdict, 0) > rank.get(old_verdict, 0):
@@ -60,6 +63,13 @@ def run(cfg, args):
         time.sleep(sch["request_delay_sec"])
     log(f"[pf] получено {len(collected)} объявлений после фильтра")
 
+    cheapest = {}  # один объект у разных агентов: уведомляем только о самом дешёвом объявлении
+    for n in collected:
+        n.setdefault("fingerprint", fingerprint(n))
+        best = cheapest.get(n["fingerprint"])
+        if best is None or (n["price_aed"], n["id"]) < (best["price_aed"], best["id"]):
+            cheapest[n["fingerprint"]] = n
+    quiet_reprice = not store.get_kv("renotify_lowest_v1") and not first_run
     sent = candidates = 0
     stats = {"target": 0, "review": 0, "suspect": 0, "skip": 0}
     matches, unmatched, digest, summary = Counter(), Counter(), [], []
@@ -96,8 +106,16 @@ def run(cfg, args):
             continue
         candidates += 1
         key = f"pf:{n['fingerprint']}"
+        if cheapest[n["fingerprint"]] is not n and not args.summary_all:
+            continue
         ok, change = should_notify(store, key, n, r["verdict"], cfg)
         if not ok and not args.summary_all:
+            continue
+        if change and quiet_reprice and not args.summary_all:
+            # первый запуск новой логики: в состоянии записана последняя, а не самая низкая цена —
+            # запоминаем текущую цену молча, чтобы не прислать ещё один «туда-обратно»
+            if not args.dry_run:
+                store.record_notification(key, n["id"], n["price_aed"], r["verdict"])
             continue
         if len(history) > 1 and not change:
             change = "Цена снижена" if history[-1][1] < history[0][1] else "Цена изменилась"
@@ -189,6 +207,7 @@ def run(cfg, args):
             store.set_kv("threads_last_run", str(time.time()))
     if not args.dry_run:
         store.set_kv("last_run", now())
+        store.set_kv("renotify_lowest_v1", now())
     store.commit()
     return 0
 

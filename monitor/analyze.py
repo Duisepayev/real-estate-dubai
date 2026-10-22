@@ -158,6 +158,8 @@ def evaluate(n, dld_db, projects, store, cfg):
     peers = store.active_peers(n) if store else []
     if peers:
         res["listing_peers"] = {"n": len(peers), "median": statistics.median(peers), "min": min(peers)}
+        if n.get("price_aed"):
+            res["listing_peers"]["discount"] = 1 - n["price_aed"] / res["listing_peers"]["median"]
     c = res["comps"]
     if c and res.get("ppsqm"):
         size = n["size_sqm"]
@@ -186,12 +188,15 @@ def verdict(n, r, a):
     if enough and d >= a["target_discount"] and spread <= a.get("max_spread", 0.35) and r.get("basis") != "area":
         return "target"
     signals = bool(r["keywords"]) or n.get("pf_flags", {}).get("is_price_drop") or n.get("pf_flags", {}).get("is_great_value")
+    if r.get("basis") == "area":
+        # сделки района без названия проекта смешивают разные башни (Murjan, Sadaf, Rimal…):
+        # дисконт к ним — грубый ориентир, поэтому пишем только при большом дисконте и срочности в тексте
+        return "review" if d is not None and d >= a["target_discount"] and r["keywords"] else "skip"
     if d is not None and d >= a["target_discount"] and c["n"] >= 2:
         return "review"  # дисконт есть, но сделок мало или они сильно разбросаны
     if d is not None and d >= a["review_discount"] and signals:
         return "review"
     peers = r.get("listing_peers")
-    if d is None and signals and peers and peers["n"] >= 3 and r.get("ppsqm") \
-            and r["ppsqm"] <= peers["median"] * (1 - a["target_discount"]):
-        return "review"  # сделок нет, но заметно дешевле соседних объявлений
+    if d is None and signals and peers and peers["n"] >= 3 and peers.get("discount", 0) >= a["target_discount"]:
+        return "review"  # сделок нет, но цена целиком заметно ниже соседних объявлений того же типа и спальности
     return "skip"
