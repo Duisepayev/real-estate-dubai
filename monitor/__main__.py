@@ -69,6 +69,7 @@ def run(cfg, args):
         best = cheapest.get(n["fingerprint"])
         if best is None or (n["price_aed"], n["id"]) < (best["price_aed"], best["id"]):
             cheapest[n["fingerprint"]] = n
+    quiet_reprice = not store.get_kv("renotify_lowest_v1") and not first_run
     sent = candidates = 0
     stats = {"target": 0, "review": 0, "suspect": 0, "skip": 0}
     matches, unmatched, digest, summary = Counter(), Counter(), [], []
@@ -109,6 +110,12 @@ def run(cfg, args):
             continue
         ok, change = should_notify(store, key, n, r["verdict"], cfg)
         if not ok and not args.summary_all:
+            continue
+        if change and quiet_reprice and not args.summary_all:
+            # первый запуск новой логики: в состоянии записана последняя, а не самая низкая цена —
+            # запоминаем текущую цену молча, чтобы не прислать ещё один «туда-обратно»
+            if not args.dry_run:
+                store.record_notification(key, n["id"], n["price_aed"], r["verdict"])
             continue
         if len(history) > 1 and not change:
             change = "Цена снижена" if history[-1][1] < history[0][1] else "Цена изменилась"
@@ -200,6 +207,7 @@ def run(cfg, args):
             store.set_kv("threads_last_run", str(time.time()))
     if not args.dry_run:
         store.set_kv("last_run", now())
+        store.set_kv("renotify_lowest_v1", now())
     store.commit()
     return 0
 

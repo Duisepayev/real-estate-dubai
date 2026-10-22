@@ -90,7 +90,7 @@ class Store:
             same_place = (n.get("tower") and o.get("tower") == n.get("tower")) or \
                          (not n.get("tower") and o.get("subcommunity") == n.get("subcommunity"))
             if same_place and o.get("bedrooms") == n.get("bedrooms") and o.get("property_type") == n.get("property_type") \
-                    and o.get("size_sqm") and o.get("price_aed") and o.get("fingerprint") != n.get("fingerprint"):
+                    and o.get("price_aed"):
                 out.append(o["price_aed"])
         return out
 
