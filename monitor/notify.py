@@ -60,7 +60,10 @@ def format_listing(n, r, cost, history, change=None):
         lines.append(f"📊 Рыночный диапазон по сделкам не рассчитан: {why}.")
     p = r.get("listing_peers")
     if p:
-        lines.append(f"   Для ориентира (не сделки): медиана {p['n']} активных объявлений рядом — {m(p['median'])} AED/м², минимум {m(p['min'])}.")
+        lines.append(f"   Для ориентира (не сделки): медиана цен {p['n']} активных объявлений рядом с тем же типом и числом спален — "
+                     f"{m(p['median'])} AED, минимум {m(p['min'])}"
+                     + (f"; этот объект {'дешевле' if p['discount'] >= 0 else 'дороже'} медианы на {pct(abs(p['discount']))}" if p.get("discount") is not None else "")
+                     + ". Сравнение по цене целиком: площадь в объявлениях бывает застройки или участка.")
 
     if r["keywords"]:
         lines.append(f"⏱ Срочность в тексте: {e(', '.join(r['keywords']))} (сами слова скидку не доказывают)")

@@ -81,7 +81,9 @@ class Store:
         return len(gone)
 
     def active_peers(self, n):
-        """Активные объявления того же здания/района и числа спален (для сравнения по запрашиваемым ценам)."""
+        """Цены активных объявлений того же здания/района, типа и числа спален (для сравнения по запрашиваемым ценам).
+        Сравниваем цену целиком, а не за м²: в объявлениях площадь указывают по-разному (застройка или участок),
+        и у больших домов цена за м² ниже — вилла 348 м² выглядела на 35% дешевле соседей, хотя стоила как они."""
         out = []
         for (d,) in self.db.execute("SELECT data FROM listing WHERE active=1 AND id!=?", (n["id"],)):
             o = json.loads(d)
@@ -89,13 +91,16 @@ class Store:
                          (not n.get("tower") and o.get("subcommunity") == n.get("subcommunity"))
             if same_place and o.get("bedrooms") == n.get("bedrooms") and o.get("property_type") == n.get("property_type") \
                     and o.get("size_sqm") and o.get("price_aed") and o.get("fingerprint") != n.get("fingerprint"):
-                out.append(o["price_aed"] / o["size_sqm"])
+                out.append(o["price_aed"])
         return out
 
     def last_notification(self, key):
         return self.db.execute("SELECT ts, price_aed, verdict FROM notified WHERE key=?", (key,)).fetchone()
 
     def record_notification(self, key, lid, price, verdict):
+        last = self.last_notification(key)
+        if last and last[1] and price:
+            price = min(price, last[1])  # храним самую низкую цену, о которой уже писали
         self.db.execute("INSERT OR REPLACE INTO notified VALUES (?,?,?,?,?)", (key, lid, now(), price, verdict))
 
     def commit(self):
